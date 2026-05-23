@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import AdminSidebar from "@/app/admin/components/Sidebar";
 
 type AdminPlayer = { id: string; player_name: string; player_email: string; player_phone: string; user_id: string | null; };
 type TournamentPlayer = { id: string; user_id: string; status: string; player_name: string; };
@@ -31,7 +32,6 @@ export default function TournamentDetail() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-
     const { data: tData } = await supabase.from("tournaments").select("*").eq("id", tournamentId).single();
     setTournament(tData);
 
@@ -65,7 +65,6 @@ export default function TournamentDetail() {
         away_team: teamsData?.find(t => t.id === m.away_team_id),
       })));
     }
-
     setLoading(false);
   }, [supabase, tournamentId]);
 
@@ -97,9 +96,7 @@ export default function TournamentDetail() {
         status: "invited",
       });
     }
-    setModalOpen(false);
-    setSelected([]);
-    fetchAll();
+    setModalOpen(false); setSelected([]); fetchAll();
   }
 
   async function inviteAll() {
@@ -112,9 +109,7 @@ export default function TournamentDetail() {
         status: "invited",
       });
     }
-    setModalOpen(false);
-    setSelected([]);
-    fetchAll();
+    setModalOpen(false); setSelected([]); fetchAll();
   }
 
   async function removePlayer(id: string) {
@@ -142,212 +137,241 @@ export default function TournamentDetail() {
     return Object.values(map).sort((a, b) => b.points - a.points);
   }
 
-  if (loading) return <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center"><p className="text-cyan-400">Loading...</p></div>;
+  if (loading) return (
+    <div className="flex w-full min-h-screen bg-[#0A0A0A]">
+      <AdminSidebar />
+      <main className="flex-1 md:ml-56 flex items-center justify-center">
+        <p className="text-cyan-400">Loading...</p>
+      </main>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] px-4 md:px-8 py-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-3">
-        <button onClick={() => router.push("/admin/tournaments")} className="text-orange-500">← Back</button>
-        <h1 className="text-cyan-400 text-lg font-bold">{tournament?.name}</h1>
-        {!isCompleted ? (
-          <button onClick={() => setModalOpen(true)} className="bg-orange-500 text-white px-3 py-2 rounded-lg font-bold text-sm">+ Player</button>
-        ) : (
-          <span className="text-cyan-400 text-xs font-bold border border-cyan-400 px-2.5 py-1.5 rounded-lg">✅ Done</span>
-        )}
-      </div>
+    <div className="flex w-full min-h-screen bg-[#0A0A0A]">
+      <AdminSidebar />
 
-      {/* Info */}
-      <div className="flex gap-2 flex-wrap mb-4">
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {format === "round_robin" ? "Round Robin" : "Knockout"}</span>
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {teamSize}</span>
-        <span className={`text-xs px-2 py-1 rounded border ${
-          isCompleted ? "text-cyan-400 border-cyan-400" : isActive ? "text-orange-500 border-orange-500" : "text-gray-500 border-[#333]"
-        }`}>
-          {isCompleted ? "✅ Completed" : isActive ? "🔥 Active" : "⏳ Upcoming"}
-        </span>
-        {/* Winner badge */}
-        {isCompleted && tournament?.winner_team_name && (
-          <span className="text-orange-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🏆 {tournament.winner_team_name}</span>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-[#222] mb-5">
-        {(["players", "teams", "fixtures", "standings"] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2.5 text-xs font-bold capitalize ${
-              activeTab === tab ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* Players Tab */}
-      {activeTab === "players" && (
-        <div>
-          <p className="text-gray-500 text-sm mb-4">👥 {tournamentPlayers.length} Players</p>
-          {tournamentPlayers.length === 0 ? (
-            <div className="text-center py-10">
-              <p className="text-white font-bold">No players yet</p>
-              <p className="text-gray-600 text-sm mt-2">Click &quot;+ Player&quot; to add from your roster</p>
-            </div>
+      <main className="flex-1 md:ml-56 px-4 md:px-10 py-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <button onClick={() => router.push("/admin/tournaments")} className="text-orange-500 text-sm mb-1">← Tournaments</button>
+            <h1 className="text-white text-2xl font-extrabold">{tournament?.name}</h1>
+          </div>
+          {!isCompleted ? (
+            <button onClick={() => setModalOpen(true)} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-orange-400 transition">+ Player</button>
           ) : (
-            <div className="flex flex-col gap-2.5">
-              {tournamentPlayers.map((p, i) => (
-                <div key={p.id} className="bg-[#111] rounded-xl p-4 flex items-center border border-[#222]">
-                  <div className="w-11 h-11 rounded-full bg-orange-500 flex items-center justify-center mr-3 text-white font-bold">{i + 1}</div>
-                  <div className="flex-1">
-                    <p className="text-white font-bold">{p.player_name}</p>
-                    <p className={`text-xs mt-0.5 ${p.status === "accepted" ? "text-cyan-400" : "text-orange-500"}`}>{p.status.toUpperCase()}</p>
-                  </div>
-                  {teams.length === 0 && !isCompleted && (
-                    <button onClick={() => removePlayer(p.id)} className="text-red-500 text-xl font-bold px-2">✕</button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {canFormTeams && !isCompleted && (
-            <button
-              onClick={() => router.push(`/admin/tournaments/${tournamentId}/form-teams`)}
-              className="w-full mt-4 bg-cyan-400 text-black font-bold py-4 rounded-xl hover:bg-cyan-300 text-base"
-            >
-              ⚡ Form Teams
-            </button>
+            <span className="text-cyan-400 text-xs font-bold border border-cyan-400 px-2.5 py-1.5 rounded-lg">✅ Done</span>
           )}
         </div>
-      )}
 
-      {/* Teams Tab */}
-      {activeTab === "teams" && (
-        <div>
-          {teams.length === 0 ? (
-            <div className="text-center py-10"><p className="text-white font-bold">No teams yet</p></div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {teams.map(team => (
-                <div key={team.id} className="bg-[#111] rounded-xl p-4 border border-cyan-400">
-                  <p className="text-cyan-400 font-bold mb-2.5">⚡ {team.name}</p>
-                  {team.members.map((m, i) => (
-                    <div key={i} className="flex items-center py-1.5 border-t border-[#222]">
-                      <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center mr-3 text-white font-bold text-sm">{m[0]?.toUpperCase()}</div>
-                      <span className="text-white">{m}</span>
+        {/* Info badges */}
+        <div className="flex gap-2 flex-wrap mb-6">
+          <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {format === "round_robin" ? "Round Robin" : "Knockout"}</span>
+          <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {teamSize}</span>
+          <span className={`text-xs px-2 py-1 rounded border ${isCompleted ? "text-cyan-400 border-cyan-400" : isActive ? "text-orange-500 border-orange-500" : "text-gray-500 border-[#333]"}`}>
+            {isCompleted ? "✅ Completed" : isActive ? "🔥 Active" : "⏳ Upcoming"}
+          </span>
+          {isCompleted && tournament?.winner_team_name && (
+            <span className="text-orange-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🏆 {tournament.winner_team_name}</span>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-[#222] mb-6">
+          {(["players", "teams", "fixtures", "standings"] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`px-5 py-2.5 text-sm font-bold capitalize ${activeTab === tab ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400"}`}>
+              {tab}
+              {tab === "players" && <span className="ml-1.5 text-xs text-gray-600">({tournamentPlayers.length})</span>}
+              {tab === "teams" && teams.length > 0 && <span className="ml-1.5 text-xs text-gray-600">({teams.length})</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Players Tab */}
+        {activeTab === "players" && (
+          <div>
+            {tournamentPlayers.length === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-white font-bold text-lg">No players yet</p>
+                <p className="text-gray-600 text-sm mt-2">Click "+ Player" to add from your roster</p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[#1A1A1A]">
+                        <th className="text-left text-gray-600 text-xs font-bold uppercase tracking-widest pb-3 pl-4">#</th>
+                        <th className="text-left text-gray-600 text-xs font-bold uppercase tracking-widest pb-3">Player</th>
+                        <th className="text-left text-gray-600 text-xs font-bold uppercase tracking-widest pb-3">Status</th>
+                        <th className="pb-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournamentPlayers.map((p, i) => (
+                        <tr key={p.id} className="border-b border-[#111] hover:bg-[#111] transition group">
+                          <td className="py-3.5 pl-4 text-gray-600 text-sm">{i + 1}</td>
+                          <td className="py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold text-sm">{p.player_name[0]?.toUpperCase()}</div>
+                              <span className="text-white font-bold text-sm">{p.player_name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5">
+                            <span className={`text-xs font-bold ${p.status === "accepted" ? "text-cyan-400" : "text-orange-500"}`}>{p.status.toUpperCase()}</span>
+                          </td>
+                          <td className="py-3.5 pr-4">
+                            {teams.length === 0 && !isCompleted && (
+                              <button onClick={() => removePlayer(p.id)} className="opacity-0 group-hover:opacity-100 text-red-500 text-sm px-3 py-1 bg-[#1A1A1A] rounded-lg border border-[#333] transition">✕ Remove</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile cards */}
+                <div className="md:hidden flex flex-col gap-2.5">
+                  {tournamentPlayers.map((p, i) => (
+                    <div key={p.id} className="bg-[#111] rounded-xl p-4 flex items-center border border-[#222]">
+                      <div className="w-11 h-11 rounded-full bg-orange-500 flex items-center justify-center mr-3 text-white font-bold">{i + 1}</div>
+                      <div className="flex-1">
+                        <p className="text-white font-bold">{p.player_name}</p>
+                        <p className={`text-xs mt-0.5 ${p.status === "accepted" ? "text-cyan-400" : "text-orange-500"}`}>{p.status.toUpperCase()}</p>
+                      </div>
+                      {teams.length === 0 && !isCompleted && (
+                        <button onClick={() => removePlayer(p.id)} className="text-red-500 text-xl font-bold px-2">✕</button>
+                      )}
                     </div>
                   ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </>
+            )}
+            {canFormTeams && !isCompleted && (
+              <button onClick={() => router.push(`/admin/tournaments/${tournamentId}/form-teams`)}
+                className="w-full mt-6 bg-cyan-400 text-black font-bold py-4 rounded-xl hover:bg-cyan-300 text-base transition">
+                ⚡ Form Teams
+              </button>
+            )}
+          </div>
+        )}
 
-      {/* Fixtures Tab */}
-      {activeTab === "fixtures" && (
-        <div>
-          {matches.length === 0 ? (
-            <div>
-              <div className="text-center py-10">
-                <p className="text-white font-bold">No fixtures yet</p>
-                <p className="text-gray-600 text-sm mt-2">Generate fixtures to get started</p>
-              </div>
-              {/* FIX: show Generate button when teams exist and tournament not completed */}
-              {!isCompleted && teams.length > 0 && (
-                <button
-                  onClick={() => router.push(`/admin/tournaments/${tournamentId}/fixtures`)}
-                  className="w-full bg-cyan-400 text-black font-bold py-4 rounded-xl hover:bg-cyan-300"
-                >
-                  📋 Generate Fixtures
-                </button>
-              )}
-            </div>
-          ) : (
-            <div>
-              {/* FIX: No "Start Tournament" button — generating fixtures sets status to active automatically */}
-              {/* Show scoring CTA when tournament is active */}
-              {isActive && (
-                <button
-                  onClick={() => router.push(`/admin/tournaments/${tournamentId}/fixtures`)}
-                  className="w-full bg-orange-500 text-white font-bold py-4 rounded-xl hover:bg-orange-400 mb-4"
-                >
-                  ⚡ Go to Scoring
-                </button>
-              )}
-
-              {/* Matches list — read-only summary */}
-              <div className="flex flex-col gap-2.5">
-                {matches.map(m => (
-                  <div key={m.id} className="bg-[#111] rounded-xl p-4 border border-[#222]">
-                    <p className="text-gray-600 text-xs mb-2">Round {m.round}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white font-bold flex-1 text-center">{m.home_team?.name}</span>
-                      <span className="px-4">
-                        {m.status === "completed"
-                          ? <span className="text-cyan-400 text-lg font-bold">{m.home_score} - {m.away_score}</span>
-                          : <span className="text-gray-600">vs</span>}
-                      </span>
-                      <span className="text-white font-bold flex-1 text-center">{m.away_team?.name}</span>
-                    </div>
-                    <p className={`text-center text-[11px] mt-2 ${m.status === "completed" ? "text-orange-500" : "text-gray-600"}`}>
-                      {m.status.toUpperCase()}
-                    </p>
+        {/* Teams Tab */}
+        {activeTab === "teams" && (
+          <div>
+            {teams.length === 0 ? (
+              <div className="text-center py-16"><p className="text-white font-bold text-lg">No teams yet</p></div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teams.map(team => (
+                  <div key={team.id} className="bg-[#111] rounded-xl p-4 border border-cyan-400">
+                    <p className="text-cyan-400 font-bold mb-3">⚡ {team.name}</p>
+                    {team.members.map((m, i) => (
+                      <div key={i} className="flex items-center py-2 border-t border-[#222]">
+                        <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center mr-3 text-white font-bold text-sm">{m[0]?.toUpperCase()}</div>
+                        <span className="text-white text-sm">{m}</span>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {/* Standings Tab */}
-      {activeTab === "standings" && (
-        <div>
-          {matches.length === 0 ? (
-            <div className="text-center py-10"><p className="text-white font-bold">No standings yet</p></div>
-          ) : format === "knockout" ? (
-            <div className="text-center py-10">
-              <p className="text-white font-bold">Knockout Format</p>
-              <p className="text-gray-600 text-sm mt-2">No standings for knockout</p>
-              {isCompleted && tournament?.winner_team_name && (
-                <div className="mt-6">
-                  <p className="text-4xl mb-2">🏆</p>
-                  <p className="text-cyan-400 font-bold text-xl">{tournament.winner_team_name}</p>
-                  <p className="text-gray-500 text-sm mt-1">Tournament Winner</p>
+        {/* Fixtures Tab */}
+        {activeTab === "fixtures" && (
+          <div>
+            {matches.length === 0 ? (
+              <div>
+                <div className="text-center py-16">
+                  <p className="text-white font-bold text-lg">No fixtures yet</p>
+                  <p className="text-gray-600 text-sm mt-2">Generate fixtures to get started</p>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div>
-              <div className="flex bg-[#111] rounded-lg py-2.5 px-3 mb-2">
-                <span className="flex-[2] text-gray-600 text-xs font-bold">Team</span>
-                <span className="flex-1 text-gray-600 text-xs font-bold text-center">P</span>
-                <span className="flex-1 text-gray-600 text-xs font-bold text-center">W</span>
-                <span className="flex-1 text-gray-600 text-xs font-bold text-center">D</span>
-                <span className="flex-1 text-gray-600 text-xs font-bold text-center">L</span>
-                <span className="flex-1 text-gray-600 text-xs font-bold text-center">PTS</span>
+                {!isCompleted && teams.length > 0 && (
+                  <button onClick={() => router.push(`/admin/tournaments/${tournamentId}/fixtures`)}
+                    className="w-full bg-cyan-400 text-black font-bold py-4 rounded-xl hover:bg-cyan-300 transition">
+                    📋 Generate Fixtures
+                  </button>
+                )}
               </div>
-              {calculateStandings().map((s, i) => (
-                <div key={s.teamId} className={`flex py-3 px-3 items-center rounded-lg ${i % 2 === 0 ? "bg-[#111]" : ""}`}>
-                  <span className="flex-[2] flex items-center gap-2">
-                    <span className="text-gray-600 text-sm w-5">{i + 1}</span>
-                    <span className="text-white font-bold text-sm">{s.teamName}</span>
-                    {isCompleted && i === 0 && <span>🏆</span>}
-                  </span>
-                  <span className="flex-1 text-gray-500 text-sm text-center">{s.played}</span>
-                  <span className="flex-1 text-gray-500 text-sm text-center">{s.won}</span>
-                  <span className="flex-1 text-gray-500 text-sm text-center">{s.drawn}</span>
-                  <span className="flex-1 text-gray-500 text-sm text-center">{s.lost}</span>
-                  <span className="flex-1 text-cyan-400 text-sm font-bold text-center">{s.points}</span>
+            ) : (
+              <div>
+                {isActive && (
+                  <button onClick={() => router.push(`/admin/tournaments/${tournamentId}/fixtures`)}
+                    className="w-full bg-orange-500 text-white font-bold py-4 rounded-xl hover:bg-orange-400 mb-6 transition">
+                    ⚡ Go to Scoring
+                  </button>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {matches.map(m => (
+                    <div key={m.id} className="bg-[#111] rounded-xl p-4 border border-[#222]">
+                      <p className="text-gray-600 text-xs mb-2">Round {m.round}</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-white font-bold flex-1 text-center text-sm">{m.home_team?.name}</span>
+                        <span className="px-4">
+                          {m.status === "completed"
+                            ? <span className="text-cyan-400 text-lg font-bold">{m.home_score} - {m.away_score}</span>
+                            : <span className="text-gray-600">vs</span>}
+                        </span>
+                        <span className="text-white font-bold flex-1 text-center text-sm">{m.away_team?.name}</span>
+                      </div>
+                      <p className={`text-center text-[11px] mt-2 ${m.status === "completed" ? "text-orange-500" : "text-gray-600"}`}>{m.status.toUpperCase()}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Standings Tab */}
+        {activeTab === "standings" && (
+          <div>
+            {matches.length === 0 ? (
+              <div className="text-center py-16"><p className="text-white font-bold">No standings yet</p></div>
+            ) : format === "knockout" ? (
+              <div className="text-center py-16">
+                <p className="text-white font-bold">Knockout Format</p>
+                <p className="text-gray-600 text-sm mt-2">No standings for knockout</p>
+                {isCompleted && tournament?.winner_team_name && (
+                  <div className="mt-6"><p className="text-4xl mb-2">🏆</p>
+                    <p className="text-cyan-400 font-bold text-xl">{tournament.winner_team_name}</p>
+                    <p className="text-gray-500 text-sm mt-1">Tournament Winner</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div className="flex bg-[#111] rounded-lg py-2.5 px-4 mb-2">
+                  <span className="flex-[2] text-gray-600 text-xs font-bold uppercase tracking-widest">Team</span>
+                  <span className="flex-1 text-gray-600 text-xs font-bold text-center">P</span>
+                  <span className="flex-1 text-gray-600 text-xs font-bold text-center">W</span>
+                  <span className="flex-1 text-gray-600 text-xs font-bold text-center">D</span>
+                  <span className="flex-1 text-gray-600 text-xs font-bold text-center">L</span>
+                  <span className="flex-1 text-gray-600 text-xs font-bold text-center">PTS</span>
+                </div>
+                {calculateStandings().map((s, i) => (
+                  <div key={s.teamId} className={`flex py-3.5 px-4 items-center rounded-lg ${i % 2 === 0 ? "bg-[#111]" : ""}`}>
+                    <span className="flex-[2] flex items-center gap-2">
+                      <span className="text-gray-600 text-sm w-5">{i + 1}</span>
+                      <span className="text-white font-bold text-sm">{s.teamName}</span>
+                      {isCompleted && i === 0 && <span>🏆</span>}
+                    </span>
+                    <span className="flex-1 text-gray-500 text-sm text-center">{s.played}</span>
+                    <span className="flex-1 text-gray-500 text-sm text-center">{s.won}</span>
+                    <span className="flex-1 text-gray-500 text-sm text-center">{s.drawn}</span>
+                    <span className="flex-1 text-gray-500 text-sm text-center">{s.lost}</span>
+                    <span className="flex-1 text-cyan-400 text-sm font-bold text-center">{s.points}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
 
       {/* Invite Modal */}
       {modalOpen && (
@@ -366,13 +390,8 @@ export default function TournamentDetail() {
                 </button>
                 <div className="max-h-80 overflow-y-auto">
                   {availablePlayers.map(player => (
-                    <button
-                      key={player.id}
-                      onClick={() => toggleSelect(player.id)}
-                      className={`w-full text-left flex items-center p-3 rounded-lg mb-2 border ${
-                        selected.includes(player.id) ? "border-cyan-400 bg-[#001A1A]" : "border-[#222] bg-[#1A1A1A]"
-                      }`}
-                    >
+                    <button key={player.id} onClick={() => toggleSelect(player.id)}
+                      className={`w-full text-left flex items-center p-3 rounded-lg mb-2 border ${selected.includes(player.id) ? "border-cyan-400 bg-[#001A1A]" : "border-[#222] bg-[#1A1A1A]"}`}>
                       <div className={`w-11 h-11 rounded-full flex items-center justify-center mr-3 text-white font-bold ${selected.includes(player.id) ? "bg-cyan-400" : "bg-orange-500"}`}>
                         {selected.includes(player.id) ? "✓" : player.player_name?.[0]?.toUpperCase()}
                       </div>

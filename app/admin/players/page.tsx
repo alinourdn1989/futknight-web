@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import AdminSidebar from "@/app/admin/components/Sidebar";
 
 type AdminPlayer = {
   id: string;
@@ -13,7 +13,6 @@ type AdminPlayer = {
 };
 
 export default function AdminPlayers() {
-  const router = useRouter();
   const supabase = createClient();
 
   const [players, setPlayers] = useState<AdminPlayer[]>([]);
@@ -87,63 +86,109 @@ export default function AdminPlayers() {
     fetchPlayers();
   }
 
-  return (
-    <div className="min-h-screen bg-[#0A0A0A] px-4 md:px-8 py-8 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <button onClick={() => router.push("/admin/tournaments")} className="text-orange-500 text-sm mb-1">← Tournaments</button>
-          <h1 className="text-cyan-400 text-3xl font-bold">👥 My Players</h1>
-        </div>
-        <button
-          onClick={openAdd}
-          className="bg-orange-500 text-white font-bold px-4 py-2 rounded-lg hover:bg-orange-600"
-        >
-          + Add Player
-        </button>
-      </div>
+  const registered = players.filter(p => p.user_id);
+  const unregistered = players.filter(p => !p.user_id);
 
-      {loading ? (
-        <p className="text-cyan-400 text-center mt-10">Loading...</p>
-      ) : players.length === 0 ? (
-        <div className="text-center mt-20">
-          <p className="text-white text-lg font-bold">No players yet</p>
-          <p className="text-gray-600 mt-2">Add players to your roster, then invite them to tournaments</p>
-          <button onClick={openAdd} className="mt-6 bg-cyan-400 text-black font-bold px-6 py-3 rounded-lg hover:bg-cyan-300">
-            + Add First Player
+  return (
+    <div className="flex w-full min-h-screen bg-[#0A0A0A]">
+      <AdminSidebar />
+
+      <main className="flex-1 md:ml-56 px-4 md:px-10 py-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-white text-2xl font-extrabold">Players</h1>
+            <p className="text-gray-600 text-sm mt-0.5">
+              {players.length} total · {registered.length} registered
+            </p>
+          </div>
+          <button
+            onClick={openAdd}
+            className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-lg hover:bg-orange-400 transition text-sm"
+          >
+            + Add Player
           </button>
         </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {players.map((p) => (
-            <div key={p.id} className="bg-[#111] rounded-xl p-4 border border-[#222] flex items-center gap-4">
-              <div className="w-11 h-11 rounded-full bg-orange-500 flex items-center justify-center font-bold text-white text-lg shrink-0">
-                {p.player_name[0].toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white font-bold">{p.player_name}</div>
-                <div className="text-gray-500 text-sm mt-0.5">{p.player_email || p.player_phone || "No contact"}</div>
-                <div className={`text-xs mt-1 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
-                  {p.user_id ? "✅ Registered" : "⏳ Not registered yet"}
-                </div>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={() => openEdit(p)}
-                  className="text-gray-400 hover:text-cyan-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(p.id)}
-                  className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]"
-                >
-                  ✕
-                </button>
-              </div>
+
+        {loading ? (
+          <p className="text-cyan-400 text-center mt-10">Loading...</p>
+        ) : players.length === 0 ? (
+          <div className="text-center mt-32">
+            <p className="text-4xl mb-4">👥</p>
+            <p className="text-white text-lg font-bold">No players yet</p>
+            <p className="text-gray-600 mt-2 mb-6">Add players to your roster, then invite them to tournaments</p>
+            <button onClick={openAdd} className="bg-cyan-400 text-black font-bold px-6 py-3 rounded-xl hover:bg-cyan-300 transition">
+              + Add First Player
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {/* Desktop table view */}
+            <div className="hidden md:block">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#1A1A1A]">
+                    <th className="text-left text-gray-600 text-xs font-bold uppercase tracking-widest pb-3 pl-4">Player</th>
+                    <th className="text-left text-gray-600 text-xs font-bold uppercase tracking-widest pb-3">Contact</th>
+                    <th className="text-left text-gray-600 text-xs font-bold uppercase tracking-widest pb-3">Status</th>
+                    <th className="pb-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.map((p) => (
+                    <tr key={p.id} className="border-b border-[#111] hover:bg-[#111] transition group">
+                      <td className="py-3.5 pl-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center font-bold text-white text-sm shrink-0">
+                            {p.player_name[0].toUpperCase()}
+                          </div>
+                          <span className="text-white font-bold text-sm">{p.player_name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5">
+                        <span className="text-gray-500 text-sm">{p.player_email || p.player_phone || "No contact"}</span>
+                      </td>
+                      <td className="py-3.5">
+                        <span className={`text-xs font-bold ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
+                          {p.user_id ? "✅ Registered" : "⏳ Pending"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 pr-4">
+                        <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition">
+                          <button onClick={() => openEdit(p)} className="text-gray-400 hover:text-cyan-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
+                          <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
-      )}
+
+            {/* Mobile card view */}
+            <div className="md:hidden flex flex-col gap-3">
+              {players.map((p) => (
+                <div key={p.id} className="bg-[#111] rounded-xl p-4 border border-[#222] flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-full bg-orange-500 flex items-center justify-center font-bold text-white text-lg shrink-0">
+                    {p.player_name[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white font-bold">{p.player_name}</div>
+                    <div className="text-gray-500 text-sm mt-0.5">{p.player_email || p.player_phone || "No contact"}</div>
+                    <div className={`text-xs mt-1 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
+                      {p.user_id ? "✅ Registered" : "⏳ Not registered yet"}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => openEdit(p)} className="text-gray-400 hover:text-cyan-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
+                    <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
 
       {/* Add/Edit Modal */}
       {showModal && (
@@ -152,7 +197,6 @@ export default function AdminPlayers() {
             <h2 className="text-cyan-400 text-xl font-bold mb-5">
               {editPlayer ? "Edit Player" : "Add Player"}
             </h2>
-
             <input
               className="w-full bg-[#0A0A0A] text-white border border-[#333] rounded-lg px-4 py-3 mb-3 focus:outline-none focus:border-cyan-400"
               placeholder="Player Name *"
@@ -173,22 +217,11 @@ export default function AdminPlayers() {
               value={phone}
               onChange={e => setPhone(e.target.value)}
             />
-
             {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full bg-cyan-400 text-black font-bold py-3 rounded-lg hover:bg-cyan-300 disabled:opacity-50 mb-3"
-            >
+            <button onClick={handleSave} disabled={saving} className="w-full bg-cyan-400 text-black font-bold py-3 rounded-lg hover:bg-cyan-300 disabled:opacity-50 mb-3">
               {saving ? "Saving..." : editPlayer ? "Save Changes" : "Add Player"}
             </button>
-            <button
-              onClick={() => setShowModal(false)}
-              className="w-full text-gray-500 py-2"
-            >
-              Cancel
-            </button>
+            <button onClick={() => setShowModal(false)} className="w-full text-gray-500 py-2">Cancel</button>
           </div>
         </div>
       )}

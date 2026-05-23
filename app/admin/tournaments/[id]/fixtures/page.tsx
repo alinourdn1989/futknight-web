@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import AdminSidebar from "@/app/admin/components/Sidebar";
 
 type Team = { id: string; name: string; };
 type Match = {
@@ -34,7 +35,6 @@ export default function FixturesPage() {
   const [scoringMatch, setScoringMatch] = useState<Match | null>(null);
   const [homeScore, setHomeScore] = useState("0");
   const [awayScore, setAwayScore] = useState("0");
-
   const [showGoals, setShowGoals] = useState(false);
   const [matchPlayers, setMatchPlayers] = useState<TeamPlayer[]>([]);
   const [goalEntries, setGoalEntries] = useState<GoalEntry[]>([]);
@@ -43,7 +43,6 @@ export default function FixturesPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-
     const { data: t } = await supabase.from("tournaments").select("*").eq("id", tournamentId).single();
     setTournament(t);
 
@@ -70,7 +69,6 @@ export default function FixturesPage() {
       });
       setMatchGoals(goalsMap);
     }
-
     setLoading(false);
   }, [supabase, tournamentId]);
 
@@ -78,54 +76,38 @@ export default function FixturesPage() {
 
   async function generateFixtures() {
     setGenerating(true);
-
     if (tournament.format === "round_robin") {
       const matchups: { home: Team; away: Team; round: number }[] = [];
       const n = teams.length;
       const teamsCopy = [...teams];
-
       for (let round = 0; round < n - 1; round++) {
         for (let i = 0; i < n / 2; i++) {
           const home = teamsCopy[i];
           const away = teamsCopy[n - 1 - i];
-          if (home && away && home.id !== away.id) {
-            matchups.push({ home, away, round: round + 1 });
-          }
+          if (home && away && home.id !== away.id) matchups.push({ home, away, round: round + 1 });
         }
         teamsCopy.splice(1, 0, teamsCopy.pop()!);
       }
-
       for (const matchup of matchups) {
         await supabase.from("matches").insert({
           tournament_id: tournamentId,
           home_team_id: matchup.home.id,
           away_team_id: matchup.away.id,
-          status: "scheduled",
-          round: matchup.round,
-          home_score: 0,
-          away_score: 0,
+          status: "scheduled", round: matchup.round, home_score: 0, away_score: 0,
         });
       }
     } else {
-      // Knockout — insert round 1 matches
       for (let i = 0; i < teams.length; i += 2) {
         if (teams[i] && teams[i + 1]) {
           await supabase.from("matches").insert({
             tournament_id: tournamentId,
-            home_team_id: teams[i].id,
-            away_team_id: teams[i + 1].id,
-            status: "scheduled",
-            round: 1,
-            home_score: 0,
-            away_score: 0,
+            home_team_id: teams[i].id, away_team_id: teams[i + 1].id,
+            status: "scheduled", round: 1, home_score: 0, away_score: 0,
           });
         }
       }
     }
-
-    // FIX: Always set tournament to "active" after generating fixtures (both formats)
     await supabase.from("tournaments").update({ status: "active" }).eq("id", tournamentId);
-
     setGenerating(false);
     fetchData();
   }
@@ -133,42 +115,29 @@ export default function FixturesPage() {
   async function fetchMatchPlayers(match: Match) {
     const { data: homeMembers } = await supabase.from("team_members").select("user_id").eq("team_id", match.home_team_id);
     const { data: awayMembers } = await supabase.from("team_members").select("user_id").eq("team_id", match.away_team_id);
-
     const allUserIds = [
       ...(homeMembers || []).map(m => ({ userId: m.user_id, teamId: match.home_team_id })),
       ...(awayMembers || []).map(m => ({ userId: m.user_id, teamId: match.away_team_id })),
     ];
-
     const players: TeamPlayer[] = [];
     for (const { userId, teamId } of allUserIds) {
       const { data: tp } = await supabase.from("tournament_players").select("player_name")
         .eq("tournament_id", tournamentId).eq("user_id", userId).single();
-      if (tp) {
-        players.push({ id: userId, player_name: tp.player_name, team_id: teamId });
-      }
+      if (tp) players.push({ id: userId, player_name: tp.player_name, team_id: teamId });
     }
-
     setMatchPlayers(players);
     setGoalEntries(players.map(p => ({ playerId: p.id, playerName: p.player_name, teamId: p.team_id, goals: 0 })));
   }
 
   async function updateScore() {
     if (!scoringMatch) return;
-
     const homeGoals = parseInt(homeScore);
     const awayGoals = parseInt(awayScore);
-
     if (tournament.format === "knockout" && homeGoals === awayGoals) {
       alert("No draws allowed in knockout matches. There must be a winner.");
       return;
     }
-
-    await supabase.from("matches").update({
-      home_score: homeGoals,
-      away_score: awayGoals,
-      status: "completed",
-    }).eq("id", scoringMatch.id);
-
+    await supabase.from("matches").update({ home_score: homeGoals, away_score: awayGoals, status: "completed" }).eq("id", scoringMatch.id);
     setSavedMatchId(scoringMatch.id);
     await fetchMatchPlayers(scoringMatch);
     setShowGoals(true);
@@ -179,245 +148,198 @@ export default function FixturesPage() {
     const awayGoalsEntered = goalEntries.filter(g => g.teamId === scoringMatch?.away_team_id).reduce((sum, g) => sum + g.goals, 0);
     const expectedHome = parseInt(homeScore) || 0;
     const expectedAway = parseInt(awayScore) || 0;
-
-    if (homeGoalsEntered !== expectedHome) {
-      alert(`${scoringMatch?.home_team?.name} must have exactly ${expectedHome} goal${expectedHome !== 1 ? "s" : ""}. Currently: ${homeGoalsEntered}`);
-      return;
-    }
-
-    if (awayGoalsEntered !== expectedAway) {
-      alert(`${scoringMatch?.away_team?.name} must have exactly ${expectedAway} goal${expectedAway !== 1 ? "s" : ""}. Currently: ${awayGoalsEntered}`);
-      return;
-    }
-
+    if (homeGoalsEntered !== expectedHome) { alert(`${scoringMatch?.home_team?.name} must have exactly ${expectedHome} goal${expectedHome !== 1 ? "s" : ""}. Currently: ${homeGoalsEntered}`); return; }
+    if (awayGoalsEntered !== expectedAway) { alert(`${scoringMatch?.away_team?.name} must have exactly ${expectedAway} goal${expectedAway !== 1 ? "s" : ""}. Currently: ${awayGoalsEntered}`); return; }
     const goalsToSave = goalEntries.filter(g => g.goals > 0);
-
     await supabase.from("match_goals").delete().eq("match_id", savedMatchId);
-
     for (const goal of goalsToSave) {
       await supabase.from("match_goals").insert({
-        match_id: savedMatchId,
-        tournament_id: tournamentId,
-        team_id: goal.teamId,
-        player_name: goal.playerName,
-        goals: goal.goals,
+        match_id: savedMatchId, tournament_id: tournamentId,
+        team_id: goal.teamId, player_name: goal.playerName, goals: goal.goals,
       });
     }
-
-    if (tournament.format === "knockout" && scoringMatch) {
-      await advanceKnockout(scoringMatch);
-    }
-
-    setShowGoals(false);
-    setScoringMatch(null);
-    setSavedMatchId(null);
-    setGoalEntries([]);
+    if (tournament.format === "knockout" && scoringMatch) await advanceKnockout(scoringMatch);
+    setShowGoals(false); setScoringMatch(null); setSavedMatchId(null); setGoalEntries([]);
     fetchData();
   }
 
   async function skipGoals() {
-    if (tournament.format === "knockout" && scoringMatch) {
-      await advanceKnockout(scoringMatch);
-    }
-
-    setShowGoals(false);
-    setScoringMatch(null);
-    setSavedMatchId(null);
-    setGoalEntries([]);
+    if (tournament.format === "knockout" && scoringMatch) await advanceKnockout(scoringMatch);
+    setShowGoals(false); setScoringMatch(null); setSavedMatchId(null); setGoalEntries([]);
     fetchData();
   }
 
   async function advanceKnockout(completedMatch: Match) {
     const currentRound = completedMatch.round;
-
-    const { data: roundMatches } = await supabase.from("matches").select("*")
-      .eq("tournament_id", tournamentId).eq("round", currentRound);
-
+    const { data: roundMatches } = await supabase.from("matches").select("*").eq("tournament_id", tournamentId).eq("round", currentRound);
     if (!roundMatches) return;
-
     const allCompleted = roundMatches.every(m => m.status === "completed");
     if (!allCompleted) return;
-
-    const winners: string[] = roundMatches.map(m => {
-      return m.home_score > m.away_score ? m.home_team_id : m.away_team_id;
-    });
-
+    const winners: string[] = roundMatches.map(m => m.home_score > m.away_score ? m.home_team_id : m.away_team_id);
     if (winners.length === 1) {
       const winnerTeam = teams.find(t => t.id === winners[0]);
       if (winnerTeam) {
-        await supabase.from("tournaments").update({
-          status: "completed",
-          winner_team_id: winnerTeam.id,
-          winner_team_name: winnerTeam.name,
-        }).eq("id", tournamentId);
-
+        await supabase.from("tournaments").update({ status: "completed", winner_team_id: winnerTeam.id, winner_team_name: winnerTeam.name }).eq("id", tournamentId);
         alert(`🏆 Tournament Complete! ${winnerTeam.name} wins!`);
         router.push(`/admin/tournaments/${tournamentId}`);
       }
       return;
     }
-
     const nextRound = currentRound + 1;
     for (let i = 0; i < winners.length; i += 2) {
       if (winners[i] && winners[i + 1]) {
         await supabase.from("matches").insert({
-          tournament_id: tournamentId,
-          home_team_id: winners[i],
-          away_team_id: winners[i + 1],
-          status: "scheduled",
-          round: nextRound,
-          home_score: 0,
-          away_score: 0,
+          tournament_id: tournamentId, home_team_id: winners[i], away_team_id: winners[i + 1],
+          status: "scheduled", round: nextRound, home_score: 0, away_score: 0,
         });
       }
     }
-
     alert(`⚡ Round ${currentRound} complete! Round ${nextRound} matches generated.`);
     fetchData();
   }
 
   async function finalizeTournament() {
-    let winnerTeamId = "";
-    let winnerName = "";
-
+    let winnerTeamId = "", winnerName = "";
     if (tournament.format === "round_robin") {
       const standingsMap: { [key: string]: { teamId: string; teamName: string; points: number } } = {};
-      teams.forEach(team => {
-        standingsMap[team.id] = { teamId: team.id, teamName: team.name, points: 0 };
-      });
+      teams.forEach(team => { standingsMap[team.id] = { teamId: team.id, teamName: team.name, points: 0 }; });
       matches.forEach(m => {
         if (m.status !== "completed") return;
-        if (m.home_score > m.away_score) {
-          if (standingsMap[m.home_team_id]) standingsMap[m.home_team_id].points += 3;
-        } else if (m.away_score > m.home_score) {
-          if (standingsMap[m.away_team_id]) standingsMap[m.away_team_id].points += 3;
-        } else {
-          if (standingsMap[m.home_team_id]) standingsMap[m.home_team_id].points += 1;
-          if (standingsMap[m.away_team_id]) standingsMap[m.away_team_id].points += 1;
-        }
+        if (m.home_score > m.away_score) { if (standingsMap[m.home_team_id]) standingsMap[m.home_team_id].points += 3; }
+        else if (m.away_score > m.home_score) { if (standingsMap[m.away_team_id]) standingsMap[m.away_team_id].points += 3; }
+        else { if (standingsMap[m.home_team_id]) standingsMap[m.home_team_id].points += 1; if (standingsMap[m.away_team_id]) standingsMap[m.away_team_id].points += 1; }
       });
       const sorted = Object.values(standingsMap).sort((a, b) => b.points - a.points);
-      if (sorted.length > 0) {
-        winnerTeamId = sorted[0].teamId;
-        winnerName = sorted[0].teamName;
-      }
+      if (sorted.length > 0) { winnerTeamId = sorted[0].teamId; winnerName = sorted[0].teamName; }
     }
-
-    await supabase.from("tournaments").update({
-      status: "completed",
-      winner_team_id: winnerTeamId,
-      winner_team_name: winnerName,
-    }).eq("id", tournamentId);
-
+    await supabase.from("tournaments").update({ status: "completed", winner_team_id: winnerTeamId, winner_team_name: winnerName }).eq("id", tournamentId);
     alert(`🏆 Tournament finalized! Winner: ${winnerName}`);
     router.push(`/admin/tournaments/${tournamentId}`);
   }
 
   function updateGoalEntry(playerId: string, goals: number) {
-    setGoalEntries(prev =>
-      prev.map(g => g.playerId === playerId ? { ...g, goals: Math.max(0, goals) } : g)
-    );
+    setGoalEntries(prev => prev.map(g => g.playerId === playerId ? { ...g, goals: Math.max(0, goals) } : g));
   }
 
   const homeGoalsEntered = goalEntries.filter(g => g.teamId === scoringMatch?.home_team_id).reduce((sum, g) => sum + g.goals, 0);
   const awayGoalsEntered = goalEntries.filter(g => g.teamId === scoringMatch?.away_team_id).reduce((sum, g) => sum + g.goals, 0);
   const expectedHome = parseInt(homeScore) || 0;
   const expectedAway = parseInt(awayScore) || 0;
-
   const allMatchesCompleted = matches.length > 0 && matches.every(m => m.status === "completed");
   const isCompleted = tournament?.status === "completed";
   const isActive = tournament?.status === "active";
 
-  if (loading) return <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center"><p className="text-cyan-400">Loading...</p></div>;
+  // Group matches by round
+  const matchesByRound: { [round: number]: Match[] } = {};
+  matches.forEach(m => {
+    if (!matchesByRound[m.round]) matchesByRound[m.round] = [];
+    matchesByRound[m.round].push(m);
+  });
+
+  if (loading) return (
+    <div className="flex w-full min-h-screen bg-[#0A0A0A]">
+      <AdminSidebar />
+      <main className="flex-1 md:ml-56 flex items-center justify-center">
+        <p className="text-cyan-400">Loading...</p>
+      </main>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] px-4 md:px-8 py-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-3">
-        <button onClick={() => router.push(`/admin/tournaments/${tournamentId}`)} className="text-orange-500">← Back</button>
-        <h1 className="text-cyan-400 text-lg font-bold flex-1 text-center">{tournament?.name}</h1>
-        {matches.length === 0 ? (
-          <button onClick={generateFixtures} disabled={generating} className="bg-orange-500 text-white px-3 py-2 rounded-lg font-bold text-sm disabled:opacity-50">
-            {generating ? "..." : "Generate"}
-          </button>
-        ) : (
-          <button onClick={() => router.push(`/admin/tournaments/${tournamentId}`)} className="bg-cyan-400 text-black px-3 py-2 rounded-lg font-bold text-sm">
-            Done ✓
-          </button>
-        )}
-      </div>
+    <div className="flex w-full min-h-screen bg-[#0A0A0A]">
+      <AdminSidebar />
 
-      <p className="text-gray-500 text-xs text-center mb-6">
-        {tournament?.format === "round_robin" ? "🔄 Round Robin" : "⚡ Knockout"} • {teams.length} Teams
-      </p>
-
-      {matches.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-white font-bold text-lg">No fixtures yet</p>
-          <p className="text-gray-600 text-sm mt-2">Tap "Generate" to create fixtures</p>
-        </div>
-      ) : (
-        <>
-          {/* Finalize button — round robin only, all matches done */}
-          {allMatchesCompleted && !isCompleted && tournament?.format === "round_robin" && (
-            <button onClick={finalizeTournament} className="w-full bg-orange-500 text-white font-bold py-4 rounded-xl mb-4">
-              🏆 Finalize Tournament
+      <main className="flex-1 md:ml-56 px-4 md:px-10 py-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <button onClick={() => router.push(`/admin/tournaments/${tournamentId}`)} className="text-orange-500 text-sm mb-1">← {tournament?.name}</button>
+            <h1 className="text-white text-2xl font-extrabold">Fixtures & Scoring</h1>
+          </div>
+          {matches.length === 0 ? (
+            <button onClick={generateFixtures} disabled={generating} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm disabled:opacity-50 hover:bg-orange-400 transition">
+              {generating ? "Generating..." : "⚡ Generate Fixtures"}
+            </button>
+          ) : (
+            <button onClick={() => router.push(`/admin/tournaments/${tournamentId}`)} className="bg-cyan-400 text-black px-5 py-2.5 rounded-lg font-bold text-sm">
+              Done ✓
             </button>
           )}
+        </div>
 
-          {/* Matches list */}
-          <div className="flex flex-col gap-2.5">
-            {matches.map(m => (
-              <div
-                key={m.id}
-                onClick={() => {
-                  if (m.status === "completed") return;
-                  if (!isActive) return; // FIX: only allow scoring when tournament is active
-                  setScoringMatch(m);
-                  setHomeScore(m.home_score.toString());
-                  setAwayScore(m.away_score.toString());
-                  setShowGoals(false);
-                }}
-                className={`bg-[#111] rounded-xl p-4 border ${
-                  m.status !== "completed" && isActive
-                    ? "border-[#333] cursor-pointer hover:border-cyan-400"
-                    : "border-[#222]"
-                }`}
-              >
-                <p className="text-gray-600 text-xs mb-2">Round {m.round}</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-white font-bold flex-1 text-center text-sm">{m.home_team?.name}</span>
-                  <span className="px-4">
-                    {m.status === "completed"
-                      ? <span className="text-cyan-400 text-lg font-bold">{m.home_score} - {m.away_score}</span>
-                      : <span className="text-gray-600">vs</span>}
-                  </span>
-                  <span className="text-white font-bold flex-1 text-center text-sm">{m.away_team?.name}</span>
+        <p className="text-gray-600 text-sm mb-8">
+          {tournament?.format === "round_robin" ? "🔄 Round Robin" : "⚡ Knockout"} · {teams.length} Teams
+        </p>
+
+        {matches.length === 0 ? (
+          <div className="text-center py-32">
+            <p className="text-white font-bold text-lg">No fixtures yet</p>
+            <p className="text-gray-600 text-sm mt-2">Click "Generate Fixtures" to create the schedule</p>
+          </div>
+        ) : (
+          <>
+            {allMatchesCompleted && !isCompleted && tournament?.format === "round_robin" && (
+              <button onClick={finalizeTournament} className="w-full bg-orange-500 text-white font-bold py-4 rounded-xl mb-6 hover:bg-orange-400 transition">
+                🏆 Finalize Tournament
+              </button>
+            )}
+
+            {/* Matches grouped by round */}
+            {Object.entries(matchesByRound).map(([round, roundMatches]) => (
+              <div key={round} className="mb-8">
+                <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">Round {round}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {roundMatches.map(m => (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        if (m.status === "completed") return;
+                        if (!isActive) return;
+                        setScoringMatch(m);
+                        setHomeScore(m.home_score.toString());
+                        setAwayScore(m.away_score.toString());
+                        setShowGoals(false);
+                      }}
+                      className={`bg-[#111] rounded-xl p-4 border ${
+                        m.status !== "completed" && isActive
+                          ? "border-[#333] cursor-pointer hover:border-cyan-400"
+                          : "border-[#1A1A1A]"
+                      } transition`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="text-white font-bold flex-1 text-center text-sm">{m.home_team?.name}</span>
+                        <span className="px-4">
+                          {m.status === "completed"
+                            ? <span className="text-cyan-400 text-lg font-bold">{m.home_score} - {m.away_score}</span>
+                            : <span className="text-gray-600 text-sm">vs</span>}
+                        </span>
+                        <span className="text-white font-bold flex-1 text-center text-sm">{m.away_team?.name}</span>
+                      </div>
+                      <p className={`text-center text-[11px] mt-2 ${m.status === "completed" ? "text-orange-500" : "text-gray-600"}`}>
+                        {m.status.toUpperCase()}
+                      </p>
+                      {m.status === "completed" && matchGoals[m.id]?.length > 0 && (
+                        <div className="flex gap-4 mt-3 pt-3 border-t border-[#222]">
+                          <div className="flex-1">
+                            {matchGoals[m.id].filter(g => g.team_id === m.home_team_id).map((g, i) => (
+                              <p key={i} className="text-gray-500 text-xs">⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}</p>
+                            ))}
+                          </div>
+                          <div className="flex-1 text-right">
+                            {matchGoals[m.id].filter(g => g.team_id === m.away_team_id).map((g, i) => (
+                              <p key={i} className="text-gray-500 text-xs">⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <p className={`text-center text-[11px] mt-2 ${m.status === "completed" ? "text-orange-500" : "text-gray-600"}`}>
-                  {m.status.toUpperCase()}
-                </p>
-
-                {/* Goal scorers */}
-                {m.status === "completed" && matchGoals[m.id] && matchGoals[m.id].length > 0 && (
-                  <div className="flex gap-4 mt-3 pt-3 border-t border-[#222]">
-                    <div className="flex-1">
-                      {matchGoals[m.id].filter(g => g.team_id === m.home_team_id).map((g, i) => (
-                        <p key={i} className="text-gray-500 text-xs">⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}</p>
-                      ))}
-                    </div>
-                    <div className="flex-1 text-right">
-                      {matchGoals[m.id].filter(g => g.team_id === m.away_team_id).map((g, i) => (
-                        <p key={i} className="text-gray-500 text-xs">⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}</p>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ))}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </main>
 
       {/* Score Modal */}
       {scoringMatch && !showGoals && (
@@ -431,22 +353,14 @@ export default function FixturesPage() {
             <div className="flex items-center justify-center gap-4 mb-6">
               <div className="flex flex-col items-center">
                 <p className="text-gray-500 text-xs mb-2">{scoringMatch.home_team?.name}</p>
-                <input
-                  type="number"
-                  value={homeScore}
-                  onChange={(e) => setHomeScore(e.target.value)}
-                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center"
-                />
+                <input type="number" value={homeScore} onChange={(e) => setHomeScore(e.target.value)}
+                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center" />
               </div>
               <span className="text-gray-600 text-2xl font-bold">-</span>
               <div className="flex flex-col items-center">
                 <p className="text-gray-500 text-xs mb-2">{scoringMatch.away_team?.name}</p>
-                <input
-                  type="number"
-                  value={awayScore}
-                  onChange={(e) => setAwayScore(e.target.value)}
-                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center"
-                />
+                <input type="number" value={awayScore} onChange={(e) => setAwayScore(e.target.value)}
+                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center" />
               </div>
             </div>
             <button onClick={updateScore} className="w-full bg-cyan-400 text-black font-bold py-4 rounded-lg mb-3">SAVE SCORE</button>
@@ -464,14 +378,10 @@ export default function FixturesPage() {
             <p className="text-orange-500 text-xs text-center mb-5">
               Enter exactly {expectedHome} goal{expectedHome !== 1 ? "s" : ""} for {scoringMatch?.home_team?.name} and {expectedAway} goal{expectedAway !== 1 ? "s" : ""} for {scoringMatch?.away_team?.name}
             </p>
-
-            {/* Home team */}
             <div className="mb-5">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-orange-500 text-sm font-bold">{scoringMatch?.home_team?.name}</p>
-                <p className={`text-sm font-bold ${homeGoalsEntered === expectedHome ? "text-cyan-400" : "text-red-500"}`}>
-                  {homeGoalsEntered}/{expectedHome}
-                </p>
+                <p className={`text-sm font-bold ${homeGoalsEntered === expectedHome ? "text-cyan-400" : "text-red-500"}`}>{homeGoalsEntered}/{expectedHome}</p>
               </div>
               {goalEntries.filter(g => g.teamId === scoringMatch?.home_team_id).map((entry) => (
                 <div key={entry.playerId} className="flex justify-between items-center py-2.5 border-b border-[#222]">
@@ -484,14 +394,10 @@ export default function FixturesPage() {
                 </div>
               ))}
             </div>
-
-            {/* Away team */}
             <div className="mb-6">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-orange-500 text-sm font-bold">{scoringMatch?.away_team?.name}</p>
-                <p className={`text-sm font-bold ${awayGoalsEntered === expectedAway ? "text-cyan-400" : "text-red-500"}`}>
-                  {awayGoalsEntered}/{expectedAway}
-                </p>
+                <p className={`text-sm font-bold ${awayGoalsEntered === expectedAway ? "text-cyan-400" : "text-red-500"}`}>{awayGoalsEntered}/{expectedAway}</p>
               </div>
               {goalEntries.filter(g => g.teamId === scoringMatch?.away_team_id).map((entry) => (
                 <div key={entry.playerId} className="flex justify-between items-center py-2.5 border-b border-[#222]">
@@ -504,7 +410,6 @@ export default function FixturesPage() {
                 </div>
               ))}
             </div>
-
             <button onClick={saveGoals} className="w-full bg-cyan-400 text-black font-bold py-4 rounded-lg mb-3">SAVE GOALS</button>
             <button onClick={skipGoals} className="w-full text-gray-500 py-3 text-sm">Skip — No goals to track</button>
           </div>
