@@ -14,11 +14,19 @@ type Tournament = {
   date: string;
 };
 
+type PlayerStats = {
+  totalGoals: number;
+  tournamentsPlayed: number;
+  wins: number;
+};
+
 export default function PlayerTournaments() {
   const router = useRouter();
   const supabase = createClient();
 
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [playerName, setPlayerName] = useState("");
+  const [stats, setStats] = useState<PlayerStats>({ totalGoals: 0, tournamentsPlayed: 0, wins: 0 });
   const [loading, setLoading] = useState(true);
 
   const fetchTournaments = useCallback(async () => {
@@ -26,13 +34,15 @@ export default function PlayerTournaments() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    // Find tournaments this player is part of
+    // Get player name from first tournament_players record
     const { data: tp } = await supabase
       .from("tournament_players")
-      .select("tournament_id")
+      .select("tournament_id, player_name")
       .eq("user_id", user.id);
 
     const ids = (tp || []).map(t => t.tournament_id);
+    if (tp && tp.length > 0) setPlayerName(tp[0].player_name);
+
     if (ids.length === 0) { setTournaments([]); setLoading(false); return; }
 
     const { data } = await supabase
@@ -42,6 +52,43 @@ export default function PlayerTournaments() {
       .order("date", { ascending: false });
 
     if (data) setTournaments(data);
+
+    // Aggregate stats
+    const { data: goals } = await supabase
+      .from("match_goals")
+      .select("goals")
+      .in("tournament_id", ids)
+      .eq("player_name", tp?.[0]?.player_name || "");
+
+    const totalGoals = (goals || []).reduce((sum, g) => sum + (g.goals || 0), 0);
+
+    // Count wins — tournaments where player's team won
+    const completedTournaments = (data || []).filter(t => t.status === "completed");
+    let wins = 0;
+    for (const t of completedTournaments) {
+      const myTp = tp?.find(p => p.tournament_id === t.id);
+      if (!myTp) continue;
+      const { data: teamMember } = await supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (teamMember) {
+        const { data: team } = await supabase
+          .from("teams")
+          .select("name")
+          .eq("id", teamMember.team_id)
+          .single();
+        if (team && t.winner_team_name === team.name) wins++;
+      }
+    }
+
+    setStats({
+      totalGoals,
+      tournamentsPlayed: ids.length,
+      wins,
+    });
+
     setLoading(false);
   }, [supabase]);
 
@@ -68,23 +115,39 @@ export default function PlayerTournaments() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] px-4 md:px-8 py-8 max-w-4xl mx-auto">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-cyan-400 text-3xl font-bold">🎮 My Tournaments</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={() => router.push("/player/stats")}
-            className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-4 py-2 rounded-lg hover:border-cyan-400"
-          >
-            📊 My Stats
-          </button>
-          <button
-            onClick={handleLogout}
-            className="bg-[#1A1A1A] border border-[#333] text-gray-400 px-4 py-2 rounded-lg hover:border-gray-500"
-          >
-            Logout
-          </button>
+        <div>
+          <h1 className="text-cyan-400 text-2xl font-bold">⚔️ FutKnight</h1>
+          {playerName && <p className="text-gray-500 text-sm mt-0.5">Welcome, <span className="text-white font-bold">{playerName}</span></p>}
         </div>
+        <button
+          onClick={handleLogout}
+          className="bg-[#1A1A1A] border border-[#333] text-gray-400 px-4 py-2 rounded-lg hover:border-gray-500 text-sm"
+        >
+          Logout
+        </button>
       </div>
+
+      {/* Stats bar */}
+      {!loading && stats.tournamentsPlayed > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="bg-[#111] border border-[#222] rounded-xl p-3 text-center">
+            <p className="text-cyan-400 text-2xl font-bold">{stats.tournamentsPlayed}</p>
+            <p className="text-gray-500 text-xs mt-0.5">Tournaments</p>
+          </div>
+          <div className="bg-[#111] border border-[#222] rounded-xl p-3 text-center">
+            <p className="text-orange-500 text-2xl font-bold">{stats.totalGoals}</p>
+            <p className="text-gray-500 text-xs mt-0.5">Total Goals</p>
+          </div>
+          <div className="bg-[#111] border border-[#222] rounded-xl p-3 text-center">
+            <p className="text-cyan-400 text-2xl font-bold">{stats.wins}</p>
+            <p className="text-gray-500 text-xs mt-0.5">Wins 🏆</p>
+          </div>
+        </div>
+      )}
+
+      <h2 className="text-white font-bold text-lg mb-3">🎮 My Tournaments</h2>
 
       {loading ? (
         <p className="text-cyan-400 text-center mt-10">Loading...</p>
@@ -113,7 +176,7 @@ export default function PlayerTournaments() {
                 <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🎮 {t.game}</span>
                 <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {t.team_size}</span>
                 <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {t.format === "round_robin" ? "Round Robin" : "Knockout"}</span>
-                <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📅 {t.date}</span>
+                {t.date && <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📅 {t.date}</span>}
               </div>
             </button>
           ))}
