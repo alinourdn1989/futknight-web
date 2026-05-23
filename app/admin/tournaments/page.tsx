@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import AdminSidebar from "@/app/admin/Sidebar";
+import AdminSidebar from "@/app/admin/components/Sidebar";
 
 type Tournament = {
   id: string;
