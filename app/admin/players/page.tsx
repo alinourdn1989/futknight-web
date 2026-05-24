@@ -22,13 +22,11 @@ type ApiPlayer = {
   player: {
     id: number;
     name: string;
-    firstname: string;
-    lastname: string;
     nationality: string;
     photo: string;
   };
   statistics: {
-    team: { name: string; logo: string };
+    team: { name: string };
     games: { position: string; rating: string };
   }[];
 };
@@ -40,19 +38,15 @@ export default function AdminPlayers() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editPlayer, setEditPlayer] = useState<AdminPlayer | null>(null);
-
-  // Form state
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  // API Football search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ApiPlayer[]>([]);
   const [searching, setSearching] = useState(false);
   const [selectedApiPlayer, setSelectedApiPlayer] = useState<ApiPlayer | null>(null);
-  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchPlayers = useCallback(async () => {
     setLoading(true);
@@ -68,7 +62,6 @@ export default function AdminPlayers() {
 
   useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
 
-  // Live search API-Football
   useEffect(() => {
     if (!searchQuery || searchQuery.length < 3 || editPlayer) {
       setSearchResults([]);
@@ -79,12 +72,8 @@ export default function AdminPlayers() {
       setSearching(true);
       try {
         const res = await fetch(
-          `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&league=39&season=2024`,
-          {
-            headers: {
-              "x-apisports-key": process.env.NEXT_PUBLIC_API_FOOTBALL_KEY!,
-            },
-          }
+          `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&season=2024`,
+          { headers: { "x-apisports-key": process.env.NEXT_PUBLIC_API_FOOTBALL_KEY! } }
         );
         const data = await res.json();
         setSearchResults(data.response || []);
@@ -122,10 +111,8 @@ export default function AdminPlayers() {
       setError("Search and select a player, or type a name"); return;
     }
     if (!email.trim() && !phone.trim()) { setError("Enter at least an email or phone"); return; }
-
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-
     const playerData = selectedApiPlayer ? {
       player_name: selectedApiPlayer.player.name,
       api_player_id: selectedApiPlayer.player.id,
@@ -138,14 +125,9 @@ export default function AdminPlayers() {
         : null,
     } : {
       player_name: searchQuery.trim(),
-      api_player_id: null,
-      photo_url: null,
-      club: null,
-      nationality: null,
-      position: null,
-      rating: null,
+      api_player_id: null, photo_url: null, club: null,
+      nationality: null, position: null, rating: null,
     };
-
     if (editPlayer) {
       await supabase.from("admin_players").update({
         ...playerData,
@@ -154,13 +136,11 @@ export default function AdminPlayers() {
       }).eq("id", editPlayer.id);
     } else {
       await supabase.from("admin_players").insert({
-        admin_id: user!.id,
-        ...playerData,
+        admin_id: user!.id, ...playerData,
         player_email: email.trim().toLowerCase() || null,
         player_phone: phone.trim() || null,
       });
     }
-
     setSaving(false);
     setShowModal(false);
     fetchPlayers();
@@ -175,14 +155,12 @@ export default function AdminPlayers() {
   return (
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
-
       <main className="flex-1 md:ml-56 px-4 md:px-10 py-8">
-        {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-white text-2xl font-extrabold">Players</h1>
             <p className="text-gray-600 text-sm mt-0.5">
-              {players.length} total · {players.filter(p => p.user_id).length} registered · {players.filter(p => p.api_player_id).length} linked to real players
+              {players.length} total Â· {players.filter(p => p.user_id).length} registered Â· {players.filter(p => p.api_player_id).length} linked to real players
             </p>
           </div>
           <button onClick={openAdd} className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-lg hover:bg-orange-400 transition text-sm">
@@ -194,41 +172,27 @@ export default function AdminPlayers() {
           <p className="text-cyan-400 text-center mt-10">Loading...</p>
         ) : players.length === 0 ? (
           <div className="text-center mt-32">
-            <p className="text-4xl mb-4">??</p>
+            <p className="text-4xl mb-4">&#128101;</p>
             <p className="text-white text-lg font-bold">No players yet</p>
             <p className="text-gray-600 mt-2 mb-6">Search real footballers or add custom players</p>
-            <button onClick={openAdd} className="bg-cyan-400 text-black font-bold px-6 py-3 rounded-xl hover:bg-cyan-300 transition">
-              + Add First Player
-            </button>
+            <button onClick={openAdd} className="bg-cyan-400 text-black font-bold px-6 py-3 rounded-xl hover:bg-cyan-300 transition">+ Add First Player</button>
           </div>
         ) : (
           <>
-            {/* Desktop grid */}
             <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {players.map((p) => (
-                <PlayerCard key={p.id} p={p} onEdit={() => openEdit(p)} onDelete={() => handleDelete(p.id)} />
-              ))}
+              {players.map(p => <PlayerCard key={p.id} p={p} onEdit={() => openEdit(p)} onDelete={() => handleDelete(p.id)} />)}
             </div>
-
-            {/* Mobile list */}
             <div className="md:hidden flex flex-col gap-3">
-              {players.map((p) => (
-                <PlayerCardMobile key={p.id} p={p} onEdit={() => openEdit(p)} onDelete={() => handleDelete(p.id)} />
-              ))}
+              {players.map(p => <PlayerCardMobile key={p.id} p={p} onEdit={() => openEdit(p)} onDelete={() => handleDelete(p.id)} />)}
             </div>
           </>
         )}
       </main>
 
-      {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center px-4 z-50">
           <div className="bg-[#111] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-cyan-400 text-xl font-bold mb-5">
-              {editPlayer ? "Edit Player" : "Add Player"}
-            </h2>
-
-            {/* Player search */}
+            <h2 className="text-cyan-400 text-xl font-bold mb-5">{editPlayer ? "Edit Player" : "Add Player"}</h2>
             <div className="relative mb-3">
               <label className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1.5 block">
                 {editPlayer ? "Player Name" : "Search Real Player"}
@@ -237,33 +201,20 @@ export default function AdminPlayers() {
                 className="w-full bg-[#0A0A0A] text-white border border-[#333] rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
                 placeholder={editPlayer ? "Player name" : "Search by name (e.g. Salah, Mbappe)..."}
                 value={searchQuery}
-                onChange={e => {
-                  setSearchQuery(e.target.value);
-                  if (!editPlayer) setSelectedApiPlayer(null);
-                }}
+                onChange={e => { setSearchQuery(e.target.value); if (!editPlayer) setSelectedApiPlayer(null); }}
               />
               {searching && <p className="text-gray-600 text-xs mt-1">Searching...</p>}
-
-              {/* Search results dropdown */}
               {searchResults.length > 0 && (
                 <div className="absolute z-10 w-full bg-[#1A1A1A] border border-[#333] rounded-xl mt-1 max-h-64 overflow-y-auto shadow-xl">
-                  {searchResults.map((result) => (
-                    <button
-                      key={result.player.id}
-                      onClick={() => selectApiPlayer(result)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#222] transition text-left border-b border-[#222] last:border-0"
-                    >
-                      <img
-                        src={result.player.photo}
-                        alt={result.player.name}
+                  {searchResults.map(result => (
+                    <button key={result.player.id} onClick={() => selectApiPlayer(result)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#222] transition text-left border-b border-[#222] last:border-0">
+                      <img src={result.player.photo} alt={result.player.name}
                         className="w-10 h-10 rounded-full object-cover bg-[#333]"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
+                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-bold text-sm truncate">{result.player.name}</p>
-                        <p className="text-gray-500 text-xs">
-                          {result.statistics[0]?.team.name} · {result.statistics[0]?.games.position} · {result.player.nationality}
-                        </p>
+                        <p className="text-gray-500 text-xs">{result.statistics[0]?.team.name} Â· {result.statistics[0]?.games.position} Â· {result.player.nationality}</p>
                       </div>
                       {result.statistics[0]?.games.rating && (
                         <span className="text-cyan-400 text-xs font-bold bg-[#001A1A] px-2 py-1 rounded">
@@ -275,40 +226,21 @@ export default function AdminPlayers() {
                 </div>
               )}
             </div>
-
-            {/* Selected player preview */}
             {selectedApiPlayer && (
               <div className="flex items-center gap-3 bg-[#0A0A0A] border border-cyan-400 rounded-xl p-3 mb-4">
-                <img
-                  src={selectedApiPlayer.player.photo}
-                  alt={selectedApiPlayer.player.name}
-                  className="w-12 h-12 rounded-full object-cover"
-                />
+                <img src={selectedApiPlayer.player.photo} alt={selectedApiPlayer.player.name} className="w-12 h-12 rounded-full object-cover" />
                 <div className="flex-1">
                   <p className="text-white font-bold text-sm">{selectedApiPlayer.player.name}</p>
-                  <p className="text-gray-500 text-xs">{selectedApiPlayer.statistics[0]?.team.name} · {selectedApiPlayer.player.nationality}</p>
+                  <p className="text-gray-500 text-xs">{selectedApiPlayer.statistics[0]?.team.name} Â· {selectedApiPlayer.player.nationality}</p>
                 </div>
-                <button onClick={() => { setSelectedApiPlayer(null); setSearchQuery(""); }} className="text-gray-600 hover:text-red-400 text-lg">?</button>
+                <button onClick={() => { setSelectedApiPlayer(null); setSearchQuery(""); }} className="text-gray-600 hover:text-red-400 text-lg">x</button>
               </div>
             )}
-
-            <input
-              className="w-full bg-[#0A0A0A] text-white border border-[#333] rounded-lg px-4 py-3 mb-3 focus:outline-none focus:border-cyan-400"
-              placeholder="Email (required if no phone)"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-            <input
-              className="w-full bg-[#0A0A0A] text-white border border-[#333] rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-cyan-400"
-              placeholder="Phone (required if no email)"
-              type="tel"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-            />
-
+            <input className="w-full bg-[#0A0A0A] text-white border border-[#333] rounded-lg px-4 py-3 mb-3 focus:outline-none focus:border-cyan-400"
+              placeholder="Email (required if no phone)" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+            <input className="w-full bg-[#0A0A0A] text-white border border-[#333] rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-cyan-400"
+              placeholder="Phone (required if no email)" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
             {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-
             <button onClick={handleSave} disabled={saving} className="w-full bg-cyan-400 text-black font-bold py-3 rounded-lg hover:bg-cyan-300 disabled:opacity-50 mb-3">
               {saving ? "Saving..." : editPlayer ? "Save Changes" : "Add Player"}
             </button>
@@ -334,7 +266,7 @@ function PlayerCard({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () => voi
         <div className="flex-1 min-w-0">
           <p className="text-white font-extrabold truncate">{p.player_name}</p>
           {p.club && <p className="text-gray-500 text-xs mt-0.5">{p.club}</p>}
-          {p.nationality && <p className="text-gray-600 text-xs">{p.nationality} · {p.position}</p>}
+          {p.nationality && <p className="text-gray-600 text-xs">{p.nationality} Â· {p.position}</p>}
         </div>
         {p.rating && (
           <div className="bg-[#001A1A] border border-cyan-400 rounded-lg px-2.5 py-1.5 text-center shrink-0">
@@ -343,17 +275,16 @@ function PlayerCard({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () => voi
           </div>
         )}
       </div>
-
       <div className="border-t border-[#1A1A1A] pt-3 flex items-center justify-between">
         <div>
           <p className="text-gray-600 text-xs">{p.player_email || p.player_phone || "No contact"}</p>
-          <p className={`text-xs font-bold mt-0.5 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
-            {p.user_id ? "? Registered" : "? Pending"}
+          <p className={"text-xs font-bold mt-0.5 " + (p.user_id ? "text-cyan-400" : "text-orange-500")}>
+            {p.user_id ? "Registered" : "Pending"}
           </p>
         </div>
         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
           <button onClick={onEdit} className="text-gray-400 hover:text-cyan-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
-          <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">?</button>
+          <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">x</button>
         </div>
       </div>
     </div>
@@ -372,10 +303,10 @@ function PlayerCardMobile({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () 
       )}
       <div className="flex-1 min-w-0">
         <p className="text-white font-bold truncate">{p.player_name}</p>
-        {p.club && <p className="text-gray-500 text-xs">{p.club} · {p.position}</p>}
+        {p.club && <p className="text-gray-500 text-xs">{p.club} Â· {p.position}</p>}
         <p className="text-gray-600 text-xs mt-0.5">{p.player_email || p.player_phone || "No contact"}</p>
-        <p className={`text-xs font-bold mt-0.5 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
-          {p.user_id ? "? Registered" : "? Pending"}
+        <p className={"text-xs font-bold mt-0.5 " + (p.user_id ? "text-cyan-400" : "text-orange-500")}>
+          {p.user_id ? "Registered" : "Pending"}
         </p>
       </div>
       {p.rating && (
@@ -386,7 +317,7 @@ function PlayerCardMobile({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () 
       )}
       <div className="flex gap-2 shrink-0">
         <button onClick={onEdit} className="text-gray-400 hover:text-cyan-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
-        <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">?</button>
+        <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">x</button>
       </div>
     </div>
   );
