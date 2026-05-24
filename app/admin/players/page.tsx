@@ -62,27 +62,40 @@ export default function AdminPlayers() {
 
   useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
 
-  useEffect(() => {
-    if (!searchQuery || searchQuery.length < 3 || editPlayer) {
+useEffect(() => {
+  if (!searchQuery || searchQuery.length < 3 || editPlayer) {
+    setSearchResults([]);
+    return;
+  }
+  if (searchTimeout.current) clearTimeout(searchTimeout.current);
+  searchTimeout.current = setTimeout(async () => {
+    setSearching(true);
+    try {
+      // Search across top 5 leagues simultaneously
+      const leagues = [39, 140, 135, 78, 61]; // PL, La Liga, Serie A, Bundesliga, Ligue 1
+      const results = await Promise.all(
+        leagues.map(league =>
+          fetch(
+            `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&league=${league}&season=2024`,
+            { headers: { "x-apisports-key": process.env.NEXT_PUBLIC_API_FOOTBALL_KEY! } }
+          ).then(r => r.json()).then(d => d.response || [])
+        )
+      );
+      // Merge and deduplicate by player ID
+      const merged = results.flat();
+      const unique = Object.values(
+        merged.reduce((acc: any, p: any) => {
+          acc[p.player.id] = p;
+          return acc;
+        }, {})
+      );
+      setSearchResults(unique as ApiPlayer[]);
+    } catch {
       setSearchResults([]);
-      return;
     }
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(
-          `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&season=2024`,
-          { headers: { "x-apisports-key": process.env.NEXT_PUBLIC_API_FOOTBALL_KEY! } }
-        );
-        const data = await res.json();
-        setSearchResults(data.response || []);
-      } catch {
-        setSearchResults([]);
-      }
-      setSearching(false);
-    }, 500);
-  }, [searchQuery, editPlayer]);
+    setSearching(false);
+  }, 500);
+}, [searchQuery, editPlayer]);
 
   function selectApiPlayer(p: ApiPlayer) {
     setSelectedApiPlayer(p);
