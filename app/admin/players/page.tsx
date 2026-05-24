@@ -79,7 +79,7 @@ export default function AdminPlayers() {
       setSearching(true);
       try {
         const res = await fetch(
-        `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&season=2024`,
+          `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&season=2024`,
           {
             headers: {
               "x-apisports-key": process.env.NEXT_PUBLIC_API_FOOTBALL_KEY!,
