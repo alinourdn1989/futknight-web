@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AdminSidebar from "@/app/admin/components/Sidebar";
+import KnockoutBracket from "@/components/KnockoutBracket";
 
 type AdminPlayer = { id: string; player_name: string; player_email: string; player_phone: string; user_id: string | null; };
 type TournamentPlayer = { id: string; user_id: string; status: string; player_name: string; };
@@ -25,23 +26,21 @@ export default function TournamentDetail() {
   const [rosterPlayers, setRosterPlayers] = useState<AdminPlayer[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [activeTab, setActiveTab] = useState<"players" | "teams" | "fixtures" | "standings">("players");
+  const [activeTab, setActiveTab] = useState<"players" | "teams" | "fixtures" | "standings" | "bracket">("players");
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const { data: tData } = await supabase.from("tournaments").select("*").eq("id", tournamentId).single();
     setTournament(tData);
-
     const { data: tp } = await supabase.from("tournament_players").select("*").eq("tournament_id", tournamentId);
     setTournamentPlayers(tp || []);
-
     const { data: { user } } = await supabase.auth.getUser();
     const { data: roster } = await supabase.from("admin_players").select("*").eq("admin_id", user?.id);
     setRosterPlayers(roster || []);
-
     const { data: teamsData } = await supabase.from("teams").select("*").eq("tournament_id", tournamentId);
     if (teamsData) {
       const withMembers = await Promise.all(teamsData.map(async (team) => {
@@ -55,7 +54,6 @@ export default function TournamentDetail() {
       }));
       setTeams(withMembers);
     }
-
     const { data: matchesData } = await supabase.from("matches").select("*")
       .eq("tournament_id", tournamentId).order("round", { ascending: true });
     if (matchesData && teamsData) {
@@ -90,10 +88,8 @@ export default function TournamentDetail() {
     for (const player of players) {
       if (tournamentPlayers.find(tp => tp.player_name === player.player_name)) continue;
       await supabase.from("tournament_players").insert({
-        tournament_id: tournamentId,
-        user_id: player.user_id || player.id,
-        player_name: player.player_name,
-        status: "invited",
+        tournament_id: tournamentId, user_id: player.user_id || player.id,
+        player_name: player.player_name, status: "invited",
       });
     }
     setModalOpen(false); setSelected([]); fetchAll();
@@ -103,10 +99,8 @@ export default function TournamentDetail() {
     for (const player of availablePlayers) {
       if (tournamentPlayers.find(tp => tp.player_name === player.player_name)) continue;
       await supabase.from("tournament_players").insert({
-        tournament_id: tournamentId,
-        user_id: player.user_id || player.id,
-        player_name: player.player_name,
-        status: "invited",
+        tournament_id: tournamentId, user_id: player.user_id || player.id,
+        player_name: player.player_name, status: "invited",
       });
     }
     setModalOpen(false); setSelected([]); fetchAll();
@@ -137,48 +131,50 @@ export default function TournamentDetail() {
     return Object.values(map).sort((a, b) => b.points - a.points);
   }
 
+  function copyShareLink() {
+    navigator.clipboard.writeText(window.location.origin + "/tournament/" + tournamentId);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
+
   if (loading) return (
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
-      <main className="flex-1 md:ml-56 flex items-center justify-center">
-        <p className="text-cyan-400">Loading...</p>
-      </main>
+      <main className="flex-1 md:ml-56 flex items-center justify-center"><p className="text-cyan-400">Loading...</p></main>
     </div>
   );
+
+  const tabs = ["players", "teams", "fixtures", "standings", ...(format === "knockout" ? ["bracket"] : [])] as const;
 
   return (
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
-
       <main className="flex-1 md:ml-56 px-4 md:px-10 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
           <div>
-            <button onClick={() => router.push("/admin/tournaments")} className="text-orange-500 text-sm mb-1">← Tournaments</button>
+            <button onClick={() => router.push("/admin/tournaments")} className="text-orange-500 text-sm mb-1">Back</button>
             <h1 className="text-white text-2xl font-extrabold">{tournament?.name}</h1>
           </div>
-          {!isCompleted ? (
-            <button onClick={() => setModalOpen(true)} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-orange-400 transition">+ Player</button>
-          ) : (
-            <span className="text-cyan-400 text-xs font-bold border border-cyan-400 px-2.5 py-1.5 rounded-lg">✅ Done</span>
-          )}
-		  <button
-  onClick={() => {
-    navigator.clipboard.writeText(`${window.location.origin}/tournament/${tournamentId}`);
-    alert("Link copied!");
-  }}
-  className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm transition"
->
-  🔗 Share
-</button>
+          <div className="flex gap-2 items-center">
+            <button onClick={copyShareLink}
+              className={"border px-3 py-2 rounded-lg text-sm font-bold transition " + (linkCopied ? "bg-cyan-400 text-black border-cyan-400" : "bg-[#1A1A1A] border-[#333] text-cyan-400 hover:border-cyan-400")}>
+              {linkCopied ? "Copied!" : "Share"}
+            </button>
+            {!isCompleted ? (
+              <button onClick={() => setModalOpen(true)} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-orange-400 transition">+ Player</button>
+            ) : (
+              <span className="text-cyan-400 text-xs font-bold border border-cyan-400 px-2.5 py-1.5 rounded-lg">Done</span>
+            )}
+          </div>
         </div>
 
         {/* Info badges */}
         <div className="flex gap-2 flex-wrap mb-6">
-          <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {format === "round_robin" ? "Round Robin" : "Knockout"}</span>
-          <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {teamSize}</span>
-          <span className={`text-xs px-2 py-1 rounded border ${isCompleted ? "text-cyan-400 border-cyan-400" : isActive ? "text-orange-500 border-orange-500" : "text-gray-500 border-[#333]"}`}>
-            {isCompleted ? "✅ Completed" : isActive ? "🔥 Active" : "⏳ Upcoming"}
+          <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">{format === "round_robin" ? "Round Robin" : "Knockout"}</span>
+          <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">{teamSize}</span>
+          <span className={"text-xs px-2 py-1 rounded border " + (isCompleted ? "text-cyan-400 border-cyan-400" : isActive ? "text-orange-500 border-orange-500" : "text-gray-500 border-[#333]")}>
+            {isCompleted ? "Completed" : isActive ? "Active" : "Upcoming"}
           </span>
           {isCompleted && tournament?.winner_team_name && (
             <span className="text-orange-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🏆 {tournament.winner_team_name}</span>
@@ -186,10 +182,10 @@ export default function TournamentDetail() {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[#222] mb-6">
-          {(["players", "teams", "fixtures", "standings"] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 text-sm font-bold capitalize ${activeTab === tab ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400"}`}>
+        <div className="flex border-b border-[#222] mb-6 overflow-x-auto">
+          {tabs.map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab as any)}
+              className={"px-5 py-2.5 text-sm font-bold capitalize whitespace-nowrap " + (activeTab === tab ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400")}>
               {tab}
               {tab === "players" && <span className="ml-1.5 text-xs text-gray-600">({tournamentPlayers.length})</span>}
               {tab === "teams" && teams.length > 0 && <span className="ml-1.5 text-xs text-gray-600">({teams.length})</span>}
@@ -207,7 +203,6 @@ export default function TournamentDetail() {
               </div>
             ) : (
               <>
-                {/* Desktop table */}
                 <div className="hidden md:block">
                   <table className="w-full">
                     <thead>
@@ -229,11 +224,11 @@ export default function TournamentDetail() {
                             </div>
                           </td>
                           <td className="py-3.5">
-                            <span className={`text-xs font-bold ${p.status === "accepted" ? "text-cyan-400" : "text-orange-500"}`}>{p.status.toUpperCase()}</span>
+                            <span className={"text-xs font-bold " + (p.status === "accepted" ? "text-cyan-400" : "text-orange-500")}>{p.status.toUpperCase()}</span>
                           </td>
                           <td className="py-3.5 pr-4">
                             {teams.length === 0 && !isCompleted && (
-                              <button onClick={() => removePlayer(p.id)} className="opacity-0 group-hover:opacity-100 text-red-500 text-sm px-3 py-1 bg-[#1A1A1A] rounded-lg border border-[#333] transition">✕ Remove</button>
+                              <button onClick={() => removePlayer(p.id)} className="opacity-0 group-hover:opacity-100 text-red-500 text-sm px-3 py-1 bg-[#1A1A1A] rounded-lg border border-[#333] transition">Remove</button>
                             )}
                           </td>
                         </tr>
@@ -241,17 +236,16 @@ export default function TournamentDetail() {
                     </tbody>
                   </table>
                 </div>
-                {/* Mobile cards */}
                 <div className="md:hidden flex flex-col gap-2.5">
                   {tournamentPlayers.map((p, i) => (
                     <div key={p.id} className="bg-[#111] rounded-xl p-4 flex items-center border border-[#222]">
                       <div className="w-11 h-11 rounded-full bg-orange-500 flex items-center justify-center mr-3 text-white font-bold">{i + 1}</div>
                       <div className="flex-1">
                         <p className="text-white font-bold">{p.player_name}</p>
-                        <p className={`text-xs mt-0.5 ${p.status === "accepted" ? "text-cyan-400" : "text-orange-500"}`}>{p.status.toUpperCase()}</p>
+                        <p className={"text-xs mt-0.5 " + (p.status === "accepted" ? "text-cyan-400" : "text-orange-500")}>{p.status.toUpperCase()}</p>
                       </div>
                       {teams.length === 0 && !isCompleted && (
-                        <button onClick={() => removePlayer(p.id)} className="text-red-500 text-xl font-bold px-2">✕</button>
+                        <button onClick={() => removePlayer(p.id)} className="text-red-500 text-xl font-bold px-2">x</button>
                       )}
                     </div>
                   ))}
@@ -259,9 +253,9 @@ export default function TournamentDetail() {
               </>
             )}
             {canFormTeams && !isCompleted && (
-              <button onClick={() => router.push(`/admin/tournaments/${tournamentId}/form-teams`)}
+              <button onClick={() => router.push("/admin/tournaments/" + tournamentId + "/form-teams")}
                 className="w-full mt-6 bg-cyan-400 text-black font-bold py-4 rounded-xl hover:bg-cyan-300 text-base transition">
-                ⚡ Form Teams
+                Form Teams
               </button>
             )}
           </div>
@@ -276,7 +270,7 @@ export default function TournamentDetail() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {teams.map(team => (
                   <div key={team.id} className="bg-[#111] rounded-xl p-4 border border-cyan-400">
-                    <p className="text-cyan-400 font-bold mb-3">⚡ {team.name}</p>
+                    <p className="text-cyan-400 font-bold mb-3">{team.name}</p>
                     {team.members.map((m, i) => (
                       <div key={i} className="flex items-center py-2 border-t border-[#222]">
                         <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center mr-3 text-white font-bold text-sm">{m[0]?.toUpperCase()}</div>
@@ -300,18 +294,18 @@ export default function TournamentDetail() {
                   <p className="text-gray-600 text-sm mt-2">Generate fixtures to get started</p>
                 </div>
                 {!isCompleted && teams.length > 0 && (
-                  <button onClick={() => router.push(`/admin/tournaments/${tournamentId}/fixtures`)}
+                  <button onClick={() => router.push("/admin/tournaments/" + tournamentId + "/fixtures")}
                     className="w-full bg-cyan-400 text-black font-bold py-4 rounded-xl hover:bg-cyan-300 transition">
-                    📋 Generate Fixtures
+                    Generate Fixtures
                   </button>
                 )}
               </div>
             ) : (
               <div>
                 {isActive && (
-                  <button onClick={() => router.push(`/admin/tournaments/${tournamentId}/fixtures`)}
+                  <button onClick={() => router.push("/admin/tournaments/" + tournamentId + "/fixtures")}
                     className="w-full bg-orange-500 text-white font-bold py-4 rounded-xl hover:bg-orange-400 mb-6 transition">
-                    ⚡ Go to Scoring
+                    Go to Scoring
                   </button>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -327,7 +321,7 @@ export default function TournamentDetail() {
                         </span>
                         <span className="text-white font-bold flex-1 text-center text-sm">{m.away_team?.name}</span>
                       </div>
-                      <p className={`text-center text-[11px] mt-2 ${m.status === "completed" ? "text-orange-500" : "text-gray-600"}`}>{m.status.toUpperCase()}</p>
+                      <p className={"text-center text-[11px] mt-2 " + (m.status === "completed" ? "text-orange-500" : "text-gray-600")}>{m.status.toUpperCase()}</p>
                     </div>
                   ))}
                 </div>
@@ -363,7 +357,7 @@ export default function TournamentDetail() {
                   <span className="flex-1 text-gray-600 text-xs font-bold text-center">PTS</span>
                 </div>
                 {calculateStandings().map((s, i) => (
-                  <div key={s.teamId} className={`flex py-3.5 px-4 items-center rounded-lg ${i % 2 === 0 ? "bg-[#111]" : ""}`}>
+                  <div key={s.teamId} className={"flex py-3.5 px-4 items-center rounded-lg " + (i % 2 === 0 ? "bg-[#111]" : "")}>
                     <span className="flex-[2] flex items-center gap-2">
                       <span className="text-gray-600 text-sm w-5">{i + 1}</span>
                       <span className="text-white font-bold text-sm">{s.teamName}</span>
@@ -380,6 +374,16 @@ export default function TournamentDetail() {
             )}
           </div>
         )}
+
+        {/* Bracket Tab */}
+        {activeTab === "bracket" && format === "knockout" && (
+          <KnockoutBracket
+            matches={matches}
+            teams={teams}
+            winnerName={tournament?.winner_team_name}
+            isCompleted={isCompleted}
+          />
+        )}
       </main>
 
       {/* Invite Modal */}
@@ -395,14 +399,14 @@ export default function TournamentDetail() {
             ) : (
               <>
                 <button onClick={inviteAll} className="w-full bg-[#1A1A1A] border border-cyan-400 text-cyan-400 p-3 rounded-lg font-bold mb-3">
-                  ✅ Add All ({availablePlayers.length})
+                  Add All ({availablePlayers.length})
                 </button>
                 <div className="max-h-80 overflow-y-auto">
                   {availablePlayers.map(player => (
                     <button key={player.id} onClick={() => toggleSelect(player.id)}
-                      className={`w-full text-left flex items-center p-3 rounded-lg mb-2 border ${selected.includes(player.id) ? "border-cyan-400 bg-[#001A1A]" : "border-[#222] bg-[#1A1A1A]"}`}>
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center mr-3 text-white font-bold ${selected.includes(player.id) ? "bg-cyan-400" : "bg-orange-500"}`}>
-                        {selected.includes(player.id) ? "✓" : player.player_name?.[0]?.toUpperCase()}
+                      className={"w-full text-left flex items-center p-3 rounded-lg mb-2 border " + (selected.includes(player.id) ? "border-cyan-400 bg-[#001A1A]" : "border-[#222] bg-[#1A1A1A]")}>
+                      <div className={"w-11 h-11 rounded-full flex items-center justify-center mr-3 text-white font-bold " + (selected.includes(player.id) ? "bg-cyan-400" : "bg-orange-500")}>
+                        {selected.includes(player.id) ? "v" : player.player_name?.[0]?.toUpperCase()}
                       </div>
                       <div className="flex-1">
                         <p className="text-white font-bold">{player.player_name}</p>
