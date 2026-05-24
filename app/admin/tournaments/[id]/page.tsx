@@ -162,6 +162,15 @@ export default function TournamentDetail() {
           ) : (
             <span className="text-cyan-400 text-xs font-bold border border-cyan-400 px-2.5 py-1.5 rounded-lg">✅ Done</span>
           )}
+		  <button
+  onClick={() => {
+    navigator.clipboard.writeText(`${window.location.origin}/tournament/${tournamentId}`);
+    alert("Link copied!");
+  }}
+  className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm transition"
+>
+  🔗 Share
+</button>
         </div>
 
         {/* Info badges */}
