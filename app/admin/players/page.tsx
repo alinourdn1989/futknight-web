@@ -182,7 +182,7 @@ export default function AdminPlayers() {
           <div>
             <h1 className="text-white text-2xl font-extrabold">Players</h1>
             <p className="text-gray-600 text-sm mt-0.5">
-              {players.length} total Â· {players.filter(p => p.user_id).length} registered Â· {players.filter(p => p.api_player_id).length} linked to real players
+              {players.length} total ¡¤ {players.filter(p => p.user_id).length} registered ¡¤ {players.filter(p => p.api_player_id).length} linked to real players
             </p>
           </div>
           <button onClick={openAdd} className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-lg hover:bg-orange-400 transition text-sm">
@@ -194,7 +194,7 @@ export default function AdminPlayers() {
           <p className="text-cyan-400 text-center mt-10">Loading...</p>
         ) : players.length === 0 ? (
           <div className="text-center mt-32">
-            <p className="text-4xl mb-4">ðŸ‘¥</p>
+            <p className="text-4xl mb-4">??</p>
             <p className="text-white text-lg font-bold">No players yet</p>
             <p className="text-gray-600 mt-2 mb-6">Search real footballers or add custom players</p>
             <button onClick={openAdd} className="bg-cyan-400 text-black font-bold px-6 py-3 rounded-xl hover:bg-cyan-300 transition">
@@ -262,7 +262,7 @@ export default function AdminPlayers() {
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-bold text-sm truncate">{result.player.name}</p>
                         <p className="text-gray-500 text-xs">
-                          {result.statistics[0]?.team.name} Â· {result.statistics[0]?.games.position} Â· {result.player.nationality}
+                          {result.statistics[0]?.team.name} ¡¤ {result.statistics[0]?.games.position} ¡¤ {result.player.nationality}
                         </p>
                       </div>
                       {result.statistics[0]?.games.rating && (
@@ -286,9 +286,9 @@ export default function AdminPlayers() {
                 />
                 <div className="flex-1">
                   <p className="text-white font-bold text-sm">{selectedApiPlayer.player.name}</p>
-                  <p className="text-gray-500 text-xs">{selectedApiPlayer.statistics[0]?.team.name} Â· {selectedApiPlayer.player.nationality}</p>
+                  <p className="text-gray-500 text-xs">{selectedApiPlayer.statistics[0]?.team.name} ¡¤ {selectedApiPlayer.player.nationality}</p>
                 </div>
-                <button onClick={() => { setSelectedApiPlayer(null); setSearchQuery(""); }} className="text-gray-600 hover:text-red-400 text-lg">ï¿½?/button>
+                <button onClick={() => { setSelectedApiPlayer(null); setSearchQuery(""); }} className="text-gray-600 hover:text-red-400 text-lg">?</button>
               </div>
             )}
 
@@ -334,7 +334,7 @@ function PlayerCard({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () => voi
         <div className="flex-1 min-w-0">
           <p className="text-white font-extrabold truncate">{p.player_name}</p>
           {p.club && <p className="text-gray-500 text-xs mt-0.5">{p.club}</p>}
-          {p.nationality && <p className="text-gray-600 text-xs">{p.nationality} Â· {p.position}</p>}
+          {p.nationality && <p className="text-gray-600 text-xs">{p.nationality} ¡¤ {p.position}</p>}
         </div>
         {p.rating && (
           <div className="bg-[#001A1A] border border-cyan-400 rounded-lg px-2.5 py-1.5 text-center shrink-0">
@@ -348,12 +348,12 @@ function PlayerCard({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () => voi
         <div>
           <p className="text-gray-600 text-xs">{p.player_email || p.player_phone || "No contact"}</p>
           <p className={`text-xs font-bold mt-0.5 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
-            {p.user_id ? "ï¿½?Registered" : "ï¿½?Pending"}
+            {p.user_id ? "? Registered" : "? Pending"}
           </p>
         </div>
         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
           <button onClick={onEdit} className="text-gray-400 hover:text-cyan-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
-          <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">ï¿½?/button>
+          <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">?</button>
         </div>
       </div>
     </div>
@@ -372,10 +372,10 @@ function PlayerCardMobile({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () 
       )}
       <div className="flex-1 min-w-0">
         <p className="text-white font-bold truncate">{p.player_name}</p>
-        {p.club && <p className="text-gray-500 text-xs">{p.club} Â· {p.position}</p>}
+        {p.club && <p className="text-gray-500 text-xs">{p.club} ¡¤ {p.position}</p>}
         <p className="text-gray-600 text-xs mt-0.5">{p.player_email || p.player_phone || "No contact"}</p>
         <p className={`text-xs font-bold mt-0.5 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
-          {p.user_id ? "ï¿½?Registered" : "ï¿½?Pending"}
+          {p.user_id ? "? Registered" : "? Pending"}
         </p>
       </div>
       {p.rating && (
@@ -386,7 +386,7 @@ function PlayerCardMobile({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () 
       )}
       <div className="flex gap-2 shrink-0">
         <button onClick={onEdit} className="text-gray-400 hover:text-cyan-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
-        <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">ï¿½?/button>
+        <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">?</button>
       </div>
     </div>
   );
