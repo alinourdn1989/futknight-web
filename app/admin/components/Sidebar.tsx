@@ -17,6 +17,7 @@ export default function AdminSidebar() {
   }
 
   const links = [
+    { href: "/football", label: "Football Hub", icon: "⚽" },
     { href: "/admin/tournaments", label: "Tournaments", icon: "🏆" },
     { href: "/admin/players", label: "Players", icon: "👥" },
     { href: "/admin/stats", label: "Stats", icon: "📊" },

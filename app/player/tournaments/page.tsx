@@ -110,6 +110,9 @@ export default function PlayerTournaments() {
           {playerName && <span className="text-gray-500 text-sm ml-3">Welcome, <span className="text-white font-bold">{playerName}</span></span>}
         </div>
         <div className="flex gap-2 items-center">
+		<button onClick={() => router.push("/football")} className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm transition">
+  ⚽ Football
+</button>
 		<button onClick={() => router.push("/player/stats")} className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm transition">
   📊 Stats
 </button>
