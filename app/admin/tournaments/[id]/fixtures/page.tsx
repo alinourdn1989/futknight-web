@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AdminSidebar from "@/app/admin/components/Sidebar";
-
+import { awardBadgesForTournament } from "@/lib/badges";
 type Team = { id: string; name: string; };
 type Match = {
   id: string;
@@ -222,6 +222,7 @@ export default function FixturesPage() {
         await supabase.from("tournaments").update({
           status: "completed", winner_team_id: winnerTeam.id, winner_team_name: winnerTeam.name,
         }).eq("id", tournamentId);
+		 await awardBadgesForTournament(tournamentId);
         // FIX 5: Show congrats screen instead of alert
         setWinnerName(winnerTeam.name);
         setShowCongrats(true);
@@ -264,6 +265,7 @@ export default function FixturesPage() {
       status: "completed", winner_team_id: winnerTeamId, winner_team_name: winner,
     }).eq("id", tournamentId);
 
+	await awardBadgesForTournament(tournamentId);
     // FIX 5: Show congrats screen instead of alert
     setWinnerName(winner);
     setShowCongrats(true);

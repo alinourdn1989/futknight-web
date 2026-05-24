@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { BADGES, BadgeKey } from "@/lib/badges";
+
+type Badge = {
+  badge_key: string;
+  badge_label: string;
+  tournament_id: string | null;
+  awarded_at: string;
+};
 
 export default function PlayerProfile() {
   const router = useRouter();
@@ -21,8 +29,8 @@ export default function PlayerProfile() {
   const [totalGoals, setTotalGoals] = useState(0);
   const [tournamentsPlayed, setTournamentsPlayed] = useState(0);
   const [wins, setWins] = useState(0);
+  const [badges, setBadges] = useState<Badge[]>([]);
 
-  // Real player data from admin_players
   const [realPlayerPhoto, setRealPlayerPhoto] = useState<string | null>(null);
   const [realPlayerClub, setRealPlayerClub] = useState<string | null>(null);
   const [realPlayerNationality, setRealPlayerNationality] = useState<string | null>(null);
@@ -40,7 +48,6 @@ export default function PlayerProfile() {
     const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).single();
     if (profile?.full_name) setFullName(profile.full_name);
 
-    // Fetch real player data linked by email
     const { data: adminPlayer } = await supabase
       .from("admin_players")
       .select("photo_url, club, nationality, position, rating, player_name")
@@ -57,10 +64,11 @@ export default function PlayerProfile() {
 
     const { data: tp } = await supabase.from("tournament_players").select("player_name, tournament_id").eq("user_id", user.id);
     if (tp && tp.length > 0) {
-      setPlayerName(tp[0].player_name);
+      const name = tp[0].player_name;
+      setPlayerName(name);
       setTournamentsPlayed(tp.length);
 
-      const { data: goals } = await supabase.from("match_goals").select("goals").eq("player_name", tp[0].player_name);
+      const { data: goals } = await supabase.from("match_goals").select("goals").eq("player_name", name);
       setTotalGoals((goals || []).reduce((sum, g) => sum + (g.goals || 0), 0));
 
       const tIds = tp.map(t => t.tournament_id);
@@ -75,6 +83,23 @@ export default function PlayerProfile() {
         }
       }
       setWins(winCount);
+
+      // Fetch badges
+      const { data: playerBadges } = await supabase
+        .from("player_badges")
+        .select("badge_key, badge_label, tournament_id, awarded_at")
+        .eq("player_name", name)
+        .order("awarded_at", { ascending: false });
+
+      // Deduplicate by badge_key
+      const unique = Object.values(
+        (playerBadges || []).reduce((acc: any, b: any) => {
+          if (!acc[b.badge_key]) acc[b.badge_key] = b;
+          return acc;
+        }, {})
+      ) as Badge[];
+
+      setBadges(unique);
     }
 
     setLoading(false);
@@ -134,7 +159,6 @@ export default function PlayerProfile() {
           {/* Left card */}
           <div className="md:col-span-1">
             <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-6 text-center sticky top-24">
-              {/* Avatar — real photo or initials */}
               {realPlayerPhoto ? (
                 <img src={realPlayerPhoto} alt={playerName}
                   className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-2 border-cyan-400" />
@@ -147,7 +171,6 @@ export default function PlayerProfile() {
               <p className="text-white text-lg font-extrabold">{playerName || fullName || email}</p>
               {playerName && <p className="text-gray-500 text-sm mt-0.5">{email}</p>}
 
-              {/* Real player info */}
               {realPlayerClub && (
                 <div className="mt-3 flex flex-col gap-1">
                   <span className="text-gray-400 text-xs">{realPlayerClub}</span>
@@ -155,7 +178,6 @@ export default function PlayerProfile() {
                 </div>
               )}
 
-              {/* OVR rating badge */}
               {realPlayerRating && (
                 <div className="inline-flex items-center gap-2 mt-3 bg-[#001A1A] border border-cyan-400 rounded-xl px-4 py-2">
                   <span className="text-cyan-400 text-2xl font-extrabold">{realPlayerRating}</span>
@@ -163,7 +185,6 @@ export default function PlayerProfile() {
                 </div>
               )}
 
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-3 mt-6">
                 <div className="bg-[#0A0A0A] rounded-xl p-3">
                   <p className="text-orange-500 text-xl font-extrabold">{tournamentsPlayed}</p>
@@ -178,6 +199,26 @@ export default function PlayerProfile() {
                   <p className="text-gray-600 text-xs mt-0.5">Wins</p>
                 </div>
               </div>
+
+              {/* Badges */}
+              {badges.length > 0 && (
+                <div className="mt-6 text-left">
+                  <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3">Achievements</p>
+                  <div className="flex flex-wrap gap-2">
+                    {badges.map(badge => {
+                      const meta = BADGES[badge.badge_key as BadgeKey];
+                      if (!meta) return null;
+                      return (
+                        <div key={badge.badge_key}
+                          className={"flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-bold " + meta.bg + " " + meta.color}
+                          title={meta.desc}>
+                          {badge.badge_label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
