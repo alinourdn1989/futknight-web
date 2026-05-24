@@ -59,7 +59,6 @@ export default function PlayerTournamentDetail() {
       })));
     }
 
-    // Goals
     const { data: goals } = await supabase.from("match_goals").select("*").eq("tournament_id", id);
     if (goals) {
       const map: { [k: string]: { team_id: string; player_name: string; goals: number }[] } = {};
@@ -69,7 +68,6 @@ export default function PlayerTournamentDetail() {
       });
       setMatchGoals(map);
 
-      // Build top scorers
       const scorerMap: { [name: string]: TopScorer } = {};
       goals.forEach(g => {
         if (!scorerMap[g.player_name]) {
@@ -81,16 +79,11 @@ export default function PlayerTournamentDetail() {
       setTopScorers(Object.values(scorerMap).sort((a, b) => b.goals - a.goals));
     }
 
-    // Which team am I on?
     if (user && teamsData) {
-      // Get player name
-      const { data: tp } = await supabase
-        .from("tournament_players").select("player_name").eq("tournament_id", id).eq("user_id", user.id).single();
+      const { data: tp } = await supabase.from("tournament_players").select("player_name").eq("tournament_id", id).eq("user_id", user.id).single();
       if (tp) setMyPlayerName(tp.player_name);
-
       for (const team of teamsData) {
-        const { data: member } = await supabase
-          .from("team_members").select("id").eq("team_id", team.id).eq("user_id", user.id).maybeSingle();
+        const { data: member } = await supabase.from("team_members").select("id").eq("team_id", team.id).eq("user_id", user.id).maybeSingle();
         if (member) { setMyTeamId(team.id); break; }
       }
     }
@@ -122,177 +115,204 @@ export default function PlayerTournamentDetail() {
   const myTeamName = teams.find(t => t.id === myTeamId)?.name || "";
   const myGoals = topScorers.find(s => s.player_name === myPlayerName)?.goals || 0;
 
+  // Group matches by round
+  const matchesByRound: { [round: number]: Match[] } = {};
+  matches.forEach(m => {
+    if (!matchesByRound[m.round]) matchesByRound[m.round] = [];
+    matchesByRound[m.round].push(m);
+  });
+
   return (
-    <div className="min-h-screen bg-[#0A0A0A] px-4 md:px-8 py-8 max-w-4xl mx-auto">
-      <button onClick={() => router.push("/player/tournaments")} className="text-orange-500 mb-4">← Back</button>
+    <div className="min-h-screen bg-[#0A0A0A]">
+      {/* Top navbar */}
+      <nav className="border-b border-[#111] px-4 md:px-10 py-4 flex justify-between items-center sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-sm z-40">
+        <button onClick={() => router.push("/player/tournaments")} className="text-orange-500 text-sm">← My Tournaments</button>
+        <span className="text-cyan-400 font-extrabold hidden md:block">⚔️ FutKnight</span>
+        <div className="w-24" />
+      </nav>
 
-      <div className="flex items-center justify-between mb-3">
-        <h1 className="text-cyan-400 text-2xl font-bold">{tournament.name}</h1>
-        <span className={`text-xs font-bold ${isCompleted ? "text-orange-500" : tournament.status === "active" ? "text-cyan-400" : "text-gray-500"}`}>
-          {tournament.status === "upcoming" ? "⏳ UPCOMING" : tournament.status === "active" ? "🔥 ACTIVE" : "✅ COMPLETED"}
-        </span>
-      </div>
-
-      <div className="flex gap-2 flex-wrap mb-4">
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {tournament.format === "round_robin" ? "Round Robin" : "Knockout"}</span>
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🎮 {tournament.game}</span>
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {tournament.team_size}</span>
-        {myTeamName && <span className="text-cyan-400 text-xs bg-[#001A1A] border border-cyan-400 px-2 py-1 rounded">⚡ {myTeamName}</span>}
-      </div>
-
-      {/* My stats strip */}
-      {myGoals > 0 && (
-        <div className="bg-[#111] border border-[#222] rounded-xl p-3 flex gap-4 mb-4">
-          <div className="text-center flex-1">
-            <p className="text-orange-500 text-xl font-bold">{myGoals}</p>
-            <p className="text-gray-500 text-xs">My Goals ⚽</p>
-          </div>
-          {myTeamName && (
-            <div className="text-center flex-1">
-              <p className="text-cyan-400 text-sm font-bold">{myTeamName}</p>
-              <p className="text-gray-500 text-xs">My Team</p>
+      <main className="px-4 md:px-10 py-8 max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h1 className="text-white text-2xl font-extrabold">{tournament.name}</h1>
+            <div className="flex gap-2 flex-wrap mt-2">
+              <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {tournament.format === "round_robin" ? "Round Robin" : "Knockout"}</span>
+              <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🎮 {tournament.game}</span>
+              <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {tournament.team_size}</span>
+              {myTeamName && <span className="text-cyan-400 text-xs bg-[#001A1A] border border-cyan-400 px-2 py-1 rounded">⚡ {myTeamName}</span>}
             </div>
-          )}
+          </div>
+          <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${
+            isCompleted ? "text-orange-500 border-orange-500" :
+            tournament.status === "active" ? "text-cyan-400 border-cyan-400" :
+            "text-gray-500 border-[#333]"
+          }`}>
+            {tournament.status === "upcoming" ? "⏳ Upcoming" : tournament.status === "active" ? "🔥 Active" : "✅ Completed"}
+          </span>
         </div>
-      )}
 
-      {/* Completed banner */}
-      {isCompleted && tournament.winner_team_name && (
-        <div className="bg-[#1A0A00] border border-orange-500 rounded-2xl p-6 text-center mb-5">
-          <div className="text-5xl mb-2">🏆</div>
-          <div className="text-orange-500 text-xl font-bold mb-1">Tournament Completed!</div>
-          <div className="text-gray-400">
-            🥇 Winner: <span className="text-orange-500 font-bold">{tournament.winner_team_name}</span>
-            {myTeamName === tournament.winner_team_name && (
-              <span className="text-cyan-400 font-bold"> — that&apos;s your team! 🎉</span>
+        {/* My stats strip */}
+        {(myGoals > 0 || myTeamName) && (
+          <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-4 flex gap-6 mb-6">
+            {myTeamName && (
+              <div>
+                <p className="text-gray-500 text-xs uppercase tracking-widest mb-1">My Team</p>
+                <p className="text-cyan-400 font-bold">⚡ {myTeamName}</p>
+              </div>
+            )}
+            {myGoals > 0 && (
+              <div>
+                <p className="text-gray-500 text-xs uppercase tracking-widest mb-1">My Goals</p>
+                <p className="text-orange-500 font-bold text-xl">⚽ {myGoals}</p>
+              </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex border-b border-[#222] mb-5">
-        <button onClick={() => setTab("fixtures")} className={`flex-1 py-2.5 font-bold text-sm ${tab === "fixtures" ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600"}`}>Fixtures</button>
-        {tournament.format === "round_robin" && (
-          <button onClick={() => setTab("standings")} className={`flex-1 py-2.5 font-bold text-sm ${tab === "standings" ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600"}`}>Standings</button>
         )}
-        <button onClick={() => setTab("stats")} className={`flex-1 py-2.5 font-bold text-sm ${tab === "stats" ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600"}`}>Stats</button>
-      </div>
 
-      {/* Fixtures */}
-      {tab === "fixtures" && (
-        matches.length === 0 ? (
-          <div className="text-center py-10"><p className="text-white font-bold">No fixtures yet</p><p className="text-gray-600 mt-1">Check back once the admin sets up matches</p></div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {matches.map((m) => {
-              const mine = m.home_team_id === myTeamId || m.away_team_id === myTeamId;
-              return (
-                <div key={m.id} className={`bg-[#111] rounded-xl p-4 border ${mine ? "border-cyan-400" : "border-[#222]"}`}>
-                  <div className="text-gray-600 text-xs mb-2">Round {m.round}{mine ? " • your match" : ""}</div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white font-bold flex-1 text-center text-sm">{m.home_team?.name}</span>
-                    <span className="px-4">
-                      {m.status === "completed"
-                        ? <span className="text-cyan-400 text-lg font-bold">{m.home_score} - {m.away_score}</span>
-                        : <span className="text-gray-600">vs</span>}
-                    </span>
-                    <span className="text-white font-bold flex-1 text-center text-sm">{m.away_team?.name}</span>
-                  </div>
-                  <div className={`text-center text-[11px] mt-2 ${m.status === "completed" ? "text-orange-500" : "text-gray-600"}`}>{m.status.toUpperCase()}</div>
-
-                  {/* Goal scorers */}
-                  {m.status === "completed" && matchGoals[m.id]?.length > 0 && (
-                    <div className="flex mt-2.5 pt-2 border-t border-[#222]">
-                      <div className="flex-1">
-                        {matchGoals[m.id].filter(g => g.team_id === m.home_team_id).map((g, i) => (
-                          <div key={i} className={`text-[11px] ${g.player_name === myPlayerName ? "text-cyan-400 font-bold" : "text-gray-500"}`}>
-                            ⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex-1 text-right">
-                        {matchGoals[m.id].filter(g => g.team_id === m.away_team_id).map((g, i) => (
-                          <div key={i} className={`text-[11px] ${g.player_name === myPlayerName ? "text-cyan-400 font-bold" : "text-gray-500"}`}>
-                            ⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )
-      )}
-
-      {/* Standings */}
-      {tab === "standings" && tournament.format === "round_robin" && (
-        matches.length === 0 ? (
-          <div className="text-center py-10"><p className="text-white font-bold">No standings yet</p></div>
-        ) : (
-          <div>
-            <div className="flex py-2.5 px-3 bg-[#111] rounded-lg mb-1 text-gray-600 text-xs font-bold">
-              <span className="flex-[2]">Team</span>
-              <span className="flex-1 text-center">P</span>
-              <span className="flex-1 text-center">W</span>
-              <span className="flex-1 text-center">D</span>
-              <span className="flex-1 text-center">L</span>
-              <span className="flex-1 text-center">PTS</span>
+        {/* Completed banner */}
+        {isCompleted && tournament.winner_team_name && (
+          <div className="bg-[#1A0A00] border border-orange-500 rounded-2xl p-6 text-center mb-6">
+            <div className="text-5xl mb-2">🏆</div>
+            <div className="text-orange-500 text-xl font-bold mb-1">Tournament Completed!</div>
+            <div className="text-gray-400">
+              🥇 Winner: <span className="text-orange-500 font-bold">{tournament.winner_team_name}</span>
+              {myTeamName === tournament.winner_team_name && (
+                <span className="text-cyan-400 font-bold"> — that&apos;s your team! 🎉</span>
+              )}
             </div>
-            {standings.map((s, i) => (
-              <div key={s.teamId} className={`flex py-3 px-3 items-center rounded-lg ${s.teamId === myTeamId ? "bg-[#001A1A]" : i % 2 === 0 ? "bg-[#111]" : ""}`}>
-                <span className="flex-[2] flex items-center gap-2">
-                  <span className="text-gray-600 text-sm w-5">{i + 1}</span>
-                  <span className="text-white font-bold text-sm">{s.teamName}</span>
-                  {isCompleted && i === 0 && <span>🏆</span>}
-                  {s.teamId === myTeamId && <span className="text-cyan-400 text-[10px] font-bold">YOU</span>}
-                </span>
-                <span className="flex-1 text-center text-gray-400 text-sm">{s.played}</span>
-                <span className="flex-1 text-center text-gray-400 text-sm">{s.won}</span>
-                <span className="flex-1 text-center text-gray-400 text-sm">{s.drawn}</span>
-                <span className="flex-1 text-center text-gray-400 text-sm">{s.lost}</span>
-                <span className="flex-1 text-center text-cyan-400 font-bold text-sm">{s.points}</span>
-              </div>
-            ))}
           </div>
-        )
-      )}
+        )}
 
-      {/* Stats — Top Scorers */}
-      {tab === "stats" && (
-        <div>
-          <h3 className="text-white font-bold mb-3">⚽ Top Scorers</h3>
-          {topScorers.length === 0 ? (
-            <div className="text-center py-10"><p className="text-white font-bold">No goals recorded yet</p></div>
+        {/* Tabs */}
+        <div className="flex border-b border-[#222] mb-6">
+          <button onClick={() => setTab("fixtures")} className={`px-5 py-2.5 font-bold text-sm ${tab === "fixtures" ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400"}`}>Fixtures</button>
+          {tournament.format === "round_robin" && (
+            <button onClick={() => setTab("standings")} className={`px-5 py-2.5 font-bold text-sm ${tab === "standings" ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400"}`}>Standings</button>
+          )}
+          <button onClick={() => setTab("stats")} className={`px-5 py-2.5 font-bold text-sm ${tab === "stats" ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400"}`}>Stats</button>
+        </div>
+
+        {/* Fixtures — grouped by round, 2-col grid on desktop */}
+        {tab === "fixtures" && (
+          matches.length === 0 ? (
+            <div className="text-center py-16"><p className="text-white font-bold">No fixtures yet</p><p className="text-gray-600 mt-1">Check back once the admin sets up matches</p></div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {topScorers.map((s, i) => (
-                <div key={s.player_name} className={`flex items-center bg-[#111] rounded-xl p-4 border ${s.player_name === myPlayerName ? "border-cyan-400" : "border-[#222]"}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mr-3 ${
-                    i === 0 ? "bg-orange-500 text-white" : i === 1 ? "bg-gray-400 text-black" : i === 2 ? "bg-orange-800 text-white" : "bg-[#222] text-gray-400"
-                  }`}>
-                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className={`font-bold text-sm ${s.player_name === myPlayerName ? "text-cyan-400" : "text-white"}`}>
-                      {s.player_name} {s.player_name === myPlayerName ? "(You)" : ""}
-                    </p>
-                    <p className="text-gray-500 text-xs">{s.teamName}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-orange-500 font-bold text-lg">{s.goals}</p>
-                    <p className="text-gray-600 text-xs">goals</p>
+            <div>
+              {Object.entries(matchesByRound).map(([round, roundMatches]) => (
+                <div key={round} className="mb-8">
+                  <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">Round {round}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {roundMatches.map((m) => {
+                      const mine = m.home_team_id === myTeamId || m.away_team_id === myTeamId;
+                      return (
+                        <div key={m.id} className={`bg-[#111] rounded-xl p-4 border ${mine ? "border-cyan-400" : "border-[#1A1A1A]"}`}>
+                          {mine && <p className="text-cyan-400 text-xs font-bold mb-2">⚡ Your match</p>}
+                          <div className="flex justify-between items-center">
+                            <span className="text-white font-bold flex-1 text-center text-sm">{m.home_team?.name}</span>
+                            <span className="px-4">
+                              {m.status === "completed"
+                                ? <span className="text-cyan-400 text-lg font-bold">{m.home_score} - {m.away_score}</span>
+                                : <span className="text-gray-600">vs</span>}
+                            </span>
+                            <span className="text-white font-bold flex-1 text-center text-sm">{m.away_team?.name}</span>
+                          </div>
+                          <div className={`text-center text-[11px] mt-2 ${m.status === "completed" ? "text-orange-500" : "text-gray-600"}`}>{m.status.toUpperCase()}</div>
+                          {m.status === "completed" && matchGoals[m.id]?.length > 0 && (
+                            <div className="flex mt-2.5 pt-2 border-t border-[#222]">
+                              <div className="flex-1">
+                                {matchGoals[m.id].filter(g => g.team_id === m.home_team_id).map((g, i) => (
+                                  <div key={i} className={`text-[11px] ${g.player_name === myPlayerName ? "text-cyan-400 font-bold" : "text-gray-500"}`}>
+                                    ⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex-1 text-right">
+                                {matchGoals[m.id].filter(g => g.team_id === m.away_team_id).map((g, i) => (
+                                  <div key={i} className={`text-[11px] ${g.player_name === myPlayerName ? "text-cyan-400 font-bold" : "text-gray-500"}`}>
+                                    ⚽ {g.player_name}{g.goals > 1 ? ` x${g.goals}` : ""}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
+          )
+        )}
 
-      <div className="h-10" />
+        {/* Standings */}
+        {tab === "standings" && tournament.format === "round_robin" && (
+          matches.length === 0 ? (
+            <div className="text-center py-16"><p className="text-white font-bold">No standings yet</p></div>
+          ) : (
+            <div className="max-w-2xl">
+              <div className="flex py-2.5 px-4 bg-[#111] rounded-lg mb-1 text-gray-600 text-xs font-bold uppercase tracking-widest">
+                <span className="flex-[2]">Team</span>
+                <span className="flex-1 text-center">P</span>
+                <span className="flex-1 text-center">W</span>
+                <span className="flex-1 text-center">D</span>
+                <span className="flex-1 text-center">L</span>
+                <span className="flex-1 text-center">PTS</span>
+              </div>
+              {standings.map((s, i) => (
+                <div key={s.teamId} className={`flex py-3.5 px-4 items-center rounded-lg ${s.teamId === myTeamId ? "bg-[#001A1A]" : i % 2 === 0 ? "bg-[#111]" : ""}`}>
+                  <span className="flex-[2] flex items-center gap-2">
+                    <span className="text-gray-600 text-sm w-5">{i + 1}</span>
+                    <span className="text-white font-bold text-sm">{s.teamName}</span>
+                    {isCompleted && i === 0 && <span>🏆</span>}
+                    {s.teamId === myTeamId && <span className="text-cyan-400 text-[10px] font-bold">YOU</span>}
+                  </span>
+                  <span className="flex-1 text-center text-gray-400 text-sm">{s.played}</span>
+                  <span className="flex-1 text-center text-gray-400 text-sm">{s.won}</span>
+                  <span className="flex-1 text-center text-gray-400 text-sm">{s.drawn}</span>
+                  <span className="flex-1 text-center text-gray-400 text-sm">{s.lost}</span>
+                  <span className="flex-1 text-center text-cyan-400 font-bold text-sm">{s.points}</span>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Stats — Top Scorers */}
+        {tab === "stats" && (
+          <div className="max-w-2xl">
+            <h3 className="text-white font-bold mb-4">⚽ Top Scorers</h3>
+            {topScorers.length === 0 ? (
+              <div className="text-center py-16"><p className="text-white font-bold">No goals recorded yet</p></div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {topScorers.map((s, i) => (
+                  <div key={s.player_name} className={`flex items-center bg-[#111] rounded-xl p-4 border ${s.player_name === myPlayerName ? "border-cyan-400" : "border-[#1A1A1A]"}`}>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm mr-4 ${
+                      i === 0 ? "bg-orange-500 text-white" : i === 1 ? "bg-gray-400 text-black" : i === 2 ? "bg-orange-800 text-white" : "bg-[#222] text-gray-400"
+                    }`}>
+                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`font-bold text-sm ${s.player_name === myPlayerName ? "text-cyan-400" : "text-white"}`}>
+                        {s.player_name} {s.player_name === myPlayerName ? <span className="text-xs">(You)</span> : ""}
+                      </p>
+                      <p className="text-gray-500 text-xs">{s.teamName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-orange-500 font-bold text-xl">{s.goals}</p>
+                      <p className="text-gray-600 text-xs">goals</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="h-10" />
+      </main>
     </div>
   );
 }

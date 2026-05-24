@@ -19,6 +19,7 @@ export default function AdminSidebar() {
   const links = [
     { href: "/admin/tournaments", label: "Tournaments", icon: "🏆" },
     { href: "/admin/players", label: "Players", icon: "👥" },
+    { href: "/admin/stats", label: "Stats", icon: "📊" },
     { href: "/admin/profile", label: "Profile", icon: "👤" },
   ];
 

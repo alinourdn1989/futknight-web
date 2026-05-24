@@ -34,7 +34,6 @@ export default function PlayerTournaments() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    // Get player name from first tournament_players record
     const { data: tp } = await supabase
       .from("tournament_players")
       .select("tournament_id, player_name")
@@ -53,7 +52,6 @@ export default function PlayerTournaments() {
 
     if (data) setTournaments(data);
 
-    // Aggregate stats
     const { data: goals } = await supabase
       .from("match_goals")
       .select("goals")
@@ -62,33 +60,19 @@ export default function PlayerTournaments() {
 
     const totalGoals = (goals || []).reduce((sum, g) => sum + (g.goals || 0), 0);
 
-    // Count wins — tournaments where player's team won
     const completedTournaments = (data || []).filter(t => t.status === "completed");
     let wins = 0;
     for (const t of completedTournaments) {
       const myTp = tp?.find(p => p.tournament_id === t.id);
       if (!myTp) continue;
-      const { data: teamMember } = await supabase
-        .from("team_members")
-        .select("team_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const { data: teamMember } = await supabase.from("team_members").select("team_id").eq("user_id", user.id).maybeSingle();
       if (teamMember) {
-        const { data: team } = await supabase
-          .from("teams")
-          .select("name")
-          .eq("id", teamMember.team_id)
-          .single();
+        const { data: team } = await supabase.from("teams").select("name").eq("id", teamMember.team_id).single();
         if (team && t.winner_team_name === team.name) wins++;
       }
     }
 
-    setStats({
-      totalGoals,
-      tournamentsPlayed: ids.length,
-      wins,
-    });
-
+    setStats({ totalGoals, tournamentsPlayed: ids.length, wins });
     setLoading(false);
   }, [supabase]);
 
@@ -107,88 +91,118 @@ export default function PlayerTournaments() {
   }
 
   function statusLabel(status: string) {
-    if (status === "upcoming") return "⏳ UPCOMING";
-    if (status === "active") return "🔥 ACTIVE";
-    if (status === "completed") return "✅ COMPLETED";
-    return status.toUpperCase();
+    if (status === "upcoming") return "⏳ Upcoming";
+    if (status === "active") return "🔥 Active";
+    if (status === "completed") return "✅ Completed";
+    return status;
   }
 
+  const active = tournaments.filter(t => t.status === "active");
+  const upcoming = tournaments.filter(t => t.status === "upcoming");
+  const completed = tournaments.filter(t => t.status === "completed");
+
   return (
-    <div className="min-h-screen bg-[#0A0A0A] px-4 md:px-8 py-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+    <div className="min-h-screen bg-[#0A0A0A]">
+      {/* Top navbar */}
+      <nav className="border-b border-[#111] px-4 md:px-10 py-4 flex justify-between items-center sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-sm z-40">
         <div>
-          <h1 className="text-cyan-400 text-2xl font-bold">⚔️ FutKnight</h1>
-          {playerName && <p className="text-gray-500 text-sm mt-0.5">Welcome, <span className="text-white font-bold">{playerName}</span></p>}
+          <span className="text-cyan-400 text-lg font-extrabold">⚔️ FutKnight</span>
+          {playerName && <span className="text-gray-500 text-sm ml-3">Welcome, <span className="text-white font-bold">{playerName}</span></span>}
         </div>
-<button
-  onClick={() => router.push("/player/profile")}
-  className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-4 py-2 rounded-lg hover:border-cyan-400 text-sm"
->
-  👤 Profile
-</button>		
-		
-        <button
-          onClick={handleLogout}
-          className="bg-[#1A1A1A] border border-[#333] text-gray-400 px-4 py-2 rounded-lg hover:border-gray-500 text-sm"
-        >
-          Logout
-        </button>
-      </div>
-
-      {/* Stats bar */}
-      {!loading && stats.tournamentsPlayed > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-[#111] border border-[#222] rounded-xl p-3 text-center">
-            <p className="text-cyan-400 text-2xl font-bold">{stats.tournamentsPlayed}</p>
-            <p className="text-gray-500 text-xs mt-0.5">Tournaments</p>
-          </div>
-          <div className="bg-[#111] border border-[#222] rounded-xl p-3 text-center">
-            <p className="text-orange-500 text-2xl font-bold">{stats.totalGoals}</p>
-            <p className="text-gray-500 text-xs mt-0.5">Total Goals</p>
-          </div>
-          <div className="bg-[#111] border border-[#222] rounded-xl p-3 text-center">
-            <p className="text-cyan-400 text-2xl font-bold">{stats.wins}</p>
-            <p className="text-gray-500 text-xs mt-0.5">Wins 🏆</p>
-          </div>
+        <div className="flex gap-2 items-center">
+          <button onClick={() => router.push("/player/profile")} className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm transition">
+            👤 Profile
+          </button>
+          <button onClick={handleLogout} className="bg-[#1A1A1A] border border-[#333] text-gray-400 px-3 py-2 rounded-lg hover:border-gray-500 text-sm transition">
+            Logout
+          </button>
         </div>
-      )}
+      </nav>
 
-      <h2 className="text-white font-bold text-lg mb-3">🎮 My Tournaments</h2>
+      <main className="px-4 md:px-10 py-8 max-w-6xl mx-auto">
+        {/* Stats bar */}
+        {!loading && stats.tournamentsPlayed > 0 && (
+          <div className="grid grid-cols-3 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-5 text-center">
+              <p className="text-cyan-400 text-3xl font-extrabold">{stats.tournamentsPlayed}</p>
+              <p className="text-gray-500 text-sm mt-1">Tournaments</p>
+            </div>
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-5 text-center">
+              <p className="text-orange-500 text-3xl font-extrabold">{stats.totalGoals}</p>
+              <p className="text-gray-500 text-sm mt-1">Total Goals ⚽</p>
+            </div>
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-5 text-center">
+              <p className="text-cyan-400 text-3xl font-extrabold">{stats.wins}</p>
+              <p className="text-gray-500 text-sm mt-1">Wins 🏆</p>
+            </div>
+          </div>
+        )}
 
-      {loading ? (
-        <p className="text-cyan-400 text-center mt-10">Loading...</p>
-      ) : tournaments.length === 0 ? (
-        <div className="text-center mt-20">
-          <p className="text-white text-lg font-bold">No tournaments yet</p>
-          <p className="text-gray-600 mt-2">You&apos;ll see tournaments here once an admin adds you</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {tournaments.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => router.push(`/player/tournaments/${t.id}`)}
-              className={`text-left bg-[#111] rounded-xl p-4 border ${
-                t.status === "active" ? "border-orange-500" : "border-[#222]"
-              } hover:border-cyan-400 transition`}
-            >
-              <div className="flex justify-between items-center mb-2.5">
-                <span className="text-white font-bold">{t.name}</span>
-                <span className={`text-xs font-bold ${statusColor(t.status)}`}>
-                  {statusLabel(t.status)}
-                </span>
+        <h2 className="text-white font-extrabold text-xl mb-4">🎮 My Tournaments</h2>
+
+        {loading ? (
+          <p className="text-cyan-400 text-center mt-10">Loading...</p>
+        ) : tournaments.length === 0 ? (
+          <div className="text-center mt-32">
+            <p className="text-4xl mb-4">🎮</p>
+            <p className="text-white text-lg font-bold">No tournaments yet</p>
+            <p className="text-gray-600 mt-2">You&apos;ll appear here once an admin adds you to a tournament</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {active.length > 0 && (
+              <div>
+                <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">🔥 Active</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {active.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} statusColor={statusColor} statusLabel={statusLabel} />)}
+                </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🎮 {t.game}</span>
-                <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {t.team_size}</span>
-                <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {t.format === "round_robin" ? "Round Robin" : "Knockout"}</span>
-                {t.date && <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📅 {t.date}</span>}
+            )}
+            {upcoming.length > 0 && (
+              <div>
+                <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">⏳ Upcoming</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {upcoming.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} statusColor={statusColor} statusLabel={statusLabel} />)}
+                </div>
               </div>
-            </button>
-          ))}
-        </div>
-      )}
+            )}
+            {completed.length > 0 && (
+              <div>
+                <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">✅ Completed</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {completed.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} statusColor={statusColor} statusLabel={statusLabel} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
+  );
+}
+
+function TournamentCard({ t, onClick, statusColor, statusLabel }: {
+  t: any; onClick: () => void;
+  statusColor: (s: string) => string;
+  statusLabel: (s: string) => string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-left bg-[#111] rounded-xl p-4 border ${
+        t.status === "active" ? "border-orange-500" : "border-[#1A1A1A]"
+      } hover:border-cyan-400 transition w-full`}
+    >
+      <div className="flex justify-between items-center mb-2.5">
+        <span className="text-white font-bold">{t.name}</span>
+        <span className={`text-xs font-bold ${statusColor(t.status)}`}>{statusLabel(t.status)}</span>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">🎮 {t.game}</span>
+        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">👥 {t.team_size}</span>
+        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📋 {t.format === "round_robin" ? "Round Robin" : "Knockout"}</span>
+        {t.date && <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">📅 {t.date}</span>}
+      </div>
+    </button>
   );
 }
