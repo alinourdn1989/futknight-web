@@ -79,7 +79,7 @@ export default function AdminPlayers() {
       setSearching(true);
       try {
         const res = await fetch(
-          `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&league=39&season=2024`,
+        `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&season=2024`,
           {
             headers: {
               "x-apisports-key": process.env.NEXT_PUBLIC_API_FOOTBALL_KEY!,
@@ -288,7 +288,7 @@ export default function AdminPlayers() {
                   <p className="text-white font-bold text-sm">{selectedApiPlayer.player.name}</p>
                   <p className="text-gray-500 text-xs">{selectedApiPlayer.statistics[0]?.team.name} ¬∑ {selectedApiPlayer.player.nationality}</p>
                 </div>
-                <button onClick={() => { setSelectedApiPlayer(null); setSearchQuery(""); }} className="text-gray-600 hover:text-red-400 text-lg">‚úï</button>
+                <button onClick={() => { setSelectedApiPlayer(null); setSearchQuery(""); }} className="text-gray-600 hover:text-red-400 text-lg">‚ú?/button>
               </div>
             )}
 
@@ -348,12 +348,12 @@ function PlayerCard({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () => voi
         <div>
           <p className="text-gray-600 text-xs">{p.player_email || p.player_phone || "No contact"}</p>
           <p className={`text-xs font-bold mt-0.5 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
-            {p.user_id ? "‚úÖ Registered" : "‚è≥ Pending"}
+            {p.user_id ? "‚ú?Registered" : "‚è?Pending"}
           </p>
         </div>
         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
           <button onClick={onEdit} className="text-gray-400 hover:text-cyan-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
-          <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">‚úï</button>
+          <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-xs px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">‚ú?/button>
         </div>
       </div>
     </div>
@@ -375,7 +375,7 @@ function PlayerCardMobile({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () 
         {p.club && <p className="text-gray-500 text-xs">{p.club} ¬∑ {p.position}</p>}
         <p className="text-gray-600 text-xs mt-0.5">{p.player_email || p.player_phone || "No contact"}</p>
         <p className={`text-xs font-bold mt-0.5 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
-          {p.user_id ? "‚úÖ Registered" : "‚è≥ Pending"}
+          {p.user_id ? "‚ú?Registered" : "‚è?Pending"}
         </p>
       </div>
       {p.rating && (
@@ -386,7 +386,7 @@ function PlayerCardMobile({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () 
       )}
       <div className="flex gap-2 shrink-0">
         <button onClick={onEdit} className="text-gray-400 hover:text-cyan-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">Edit</button>
-        <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">‚úï</button>
+        <button onClick={onDelete} className="text-gray-400 hover:text-red-400 text-sm px-3 py-1.5 bg-[#1A1A1A] rounded-lg border border-[#333]">‚ú?/button>
       </div>
     </div>
   );
