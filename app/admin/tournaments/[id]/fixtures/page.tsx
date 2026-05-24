@@ -36,10 +36,13 @@ export default function FixturesPage() {
   const [homeScore, setHomeScore] = useState("0");
   const [awayScore, setAwayScore] = useState("0");
   const [showGoals, setShowGoals] = useState(false);
-  const [matchPlayers, setMatchPlayers] = useState<TeamPlayer[]>([]);
   const [goalEntries, setGoalEntries] = useState<GoalEntry[]>([]);
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
   const [matchGoals, setMatchGoals] = useState<{ [matchId: string]: any[] }>({});
+
+  // FIX 5: Congrats screen state
+  const [showCongrats, setShowCongrats] = useState(false);
+  const [winnerName, setWinnerName] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -74,6 +77,18 @@ export default function FixturesPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // FIX 5: Auto-redirect after congrats screen
+  useEffect(() => {
+    if (showCongrats) {
+      const timer = setTimeout(() => {
+        setShowCongrats(false);
+        // FIX 3: Navigate to tournaments list after finalize
+        router.push("/admin/tournaments");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showCongrats, router]);
+
   async function generateFixtures() {
     setGenerating(true);
     if (tournament.format === "round_robin") {
@@ -91,8 +106,7 @@ export default function FixturesPage() {
       for (const matchup of matchups) {
         await supabase.from("matches").insert({
           tournament_id: tournamentId,
-          home_team_id: matchup.home.id,
-          away_team_id: matchup.away.id,
+          home_team_id: matchup.home.id, away_team_id: matchup.away.id,
           status: "scheduled", round: matchup.round, home_score: 0, away_score: 0,
         });
       }
@@ -125,20 +139,34 @@ export default function FixturesPage() {
         .eq("tournament_id", tournamentId).eq("user_id", userId).single();
       if (tp) players.push({ id: userId, player_name: tp.player_name, team_id: teamId });
     }
-    setMatchPlayers(players);
     setGoalEntries(players.map(p => ({ playerId: p.id, playerName: p.player_name, teamId: p.team_id, goals: 0 })));
   }
 
   async function updateScore() {
     if (!scoringMatch) return;
-    const homeGoals = parseInt(homeScore);
-    const awayGoals = parseInt(awayScore);
+    const homeGoals = parseInt(homeScore) || 0;
+    const awayGoals = parseInt(awayScore) || 0;
+
     if (tournament.format === "knockout" && homeGoals === awayGoals) {
       alert("No draws allowed in knockout matches. There must be a winner.");
       return;
     }
-    await supabase.from("matches").update({ home_score: homeGoals, away_score: awayGoals, status: "completed" }).eq("id", scoringMatch.id);
+
+    await supabase.from("matches").update({
+      home_score: homeGoals, away_score: awayGoals, status: "completed",
+    }).eq("id", scoringMatch.id);
+
     setSavedMatchId(scoringMatch.id);
+
+    // FIX 2: Skip goals modal if 0-0
+    if (homeGoals === 0 && awayGoals === 0) {
+      if (tournament.format === "knockout") await advanceKnockout(scoringMatch);
+      setScoringMatch(null);
+      setSavedMatchId(null);
+      fetchData();
+      return;
+    }
+
     await fetchMatchPlayers(scoringMatch);
     setShowGoals(true);
   }
@@ -148,8 +176,16 @@ export default function FixturesPage() {
     const awayGoalsEntered = goalEntries.filter(g => g.teamId === scoringMatch?.away_team_id).reduce((sum, g) => sum + g.goals, 0);
     const expectedHome = parseInt(homeScore) || 0;
     const expectedAway = parseInt(awayScore) || 0;
-    if (homeGoalsEntered !== expectedHome) { alert(`${scoringMatch?.home_team?.name} must have exactly ${expectedHome} goal${expectedHome !== 1 ? "s" : ""}. Currently: ${homeGoalsEntered}`); return; }
-    if (awayGoalsEntered !== expectedAway) { alert(`${scoringMatch?.away_team?.name} must have exactly ${expectedAway} goal${expectedAway !== 1 ? "s" : ""}. Currently: ${awayGoalsEntered}`); return; }
+
+    if (homeGoalsEntered !== expectedHome) {
+      alert(`${scoringMatch?.home_team?.name} must have exactly ${expectedHome} goal${expectedHome !== 1 ? "s" : ""}. Currently: ${homeGoalsEntered}`);
+      return;
+    }
+    if (awayGoalsEntered !== expectedAway) {
+      alert(`${scoringMatch?.away_team?.name} must have exactly ${expectedAway} goal${expectedAway !== 1 ? "s" : ""}. Currently: ${awayGoalsEntered}`);
+      return;
+    }
+
     const goalsToSave = goalEntries.filter(g => g.goals > 0);
     await supabase.from("match_goals").delete().eq("match_id", savedMatchId);
     for (const goal of goalsToSave) {
@@ -158,6 +194,7 @@ export default function FixturesPage() {
         team_id: goal.teamId, player_name: goal.playerName, goals: goal.goals,
       });
     }
+
     if (tournament.format === "knockout" && scoringMatch) await advanceKnockout(scoringMatch);
     setShowGoals(false); setScoringMatch(null); setSavedMatchId(null); setGoalEntries([]);
     fetchData();
@@ -171,20 +208,27 @@ export default function FixturesPage() {
 
   async function advanceKnockout(completedMatch: Match) {
     const currentRound = completedMatch.round;
-    const { data: roundMatches } = await supabase.from("matches").select("*").eq("tournament_id", tournamentId).eq("round", currentRound);
+    const { data: roundMatches } = await supabase.from("matches").select("*")
+      .eq("tournament_id", tournamentId).eq("round", currentRound);
     if (!roundMatches) return;
     const allCompleted = roundMatches.every(m => m.status === "completed");
     if (!allCompleted) return;
+
     const winners: string[] = roundMatches.map(m => m.home_score > m.away_score ? m.home_team_id : m.away_team_id);
+
     if (winners.length === 1) {
       const winnerTeam = teams.find(t => t.id === winners[0]);
       if (winnerTeam) {
-        await supabase.from("tournaments").update({ status: "completed", winner_team_id: winnerTeam.id, winner_team_name: winnerTeam.name }).eq("id", tournamentId);
-        alert(`🏆 Tournament Complete! ${winnerTeam.name} wins!`);
-        router.push(`/admin/tournaments/${tournamentId}`);
+        await supabase.from("tournaments").update({
+          status: "completed", winner_team_id: winnerTeam.id, winner_team_name: winnerTeam.name,
+        }).eq("id", tournamentId);
+        // FIX 5: Show congrats screen instead of alert
+        setWinnerName(winnerTeam.name);
+        setShowCongrats(true);
       }
       return;
     }
+
     const nextRound = currentRound + 1;
     for (let i = 0; i < winners.length; i += 2) {
       if (winners[i] && winners[i + 1]) {
@@ -199,7 +243,7 @@ export default function FixturesPage() {
   }
 
   async function finalizeTournament() {
-    let winnerTeamId = "", winnerName = "";
+    let winnerTeamId = "", winner = "";
     if (tournament.format === "round_robin") {
       const standingsMap: { [key: string]: { teamId: string; teamName: string; points: number } } = {};
       teams.forEach(team => { standingsMap[team.id] = { teamId: team.id, teamName: team.name, points: 0 }; });
@@ -207,14 +251,22 @@ export default function FixturesPage() {
         if (m.status !== "completed") return;
         if (m.home_score > m.away_score) { if (standingsMap[m.home_team_id]) standingsMap[m.home_team_id].points += 3; }
         else if (m.away_score > m.home_score) { if (standingsMap[m.away_team_id]) standingsMap[m.away_team_id].points += 3; }
-        else { if (standingsMap[m.home_team_id]) standingsMap[m.home_team_id].points += 1; if (standingsMap[m.away_team_id]) standingsMap[m.away_team_id].points += 1; }
+        else {
+          if (standingsMap[m.home_team_id]) standingsMap[m.home_team_id].points += 1;
+          if (standingsMap[m.away_team_id]) standingsMap[m.away_team_id].points += 1;
+        }
       });
       const sorted = Object.values(standingsMap).sort((a, b) => b.points - a.points);
-      if (sorted.length > 0) { winnerTeamId = sorted[0].teamId; winnerName = sorted[0].teamName; }
+      if (sorted.length > 0) { winnerTeamId = sorted[0].teamId; winner = sorted[0].teamName; }
     }
-    await supabase.from("tournaments").update({ status: "completed", winner_team_id: winnerTeamId, winner_team_name: winnerName }).eq("id", tournamentId);
-    alert(`🏆 Tournament finalized! Winner: ${winnerName}`);
-    router.push(`/admin/tournaments/${tournamentId}`);
+
+    await supabase.from("tournaments").update({
+      status: "completed", winner_team_id: winnerTeamId, winner_team_name: winner,
+    }).eq("id", tournamentId);
+
+    // FIX 5: Show congrats screen instead of alert
+    setWinnerName(winner);
+    setShowCongrats(true);
   }
 
   function updateGoalEntry(playerId: string, goals: number) {
@@ -229,7 +281,6 @@ export default function FixturesPage() {
   const isCompleted = tournament?.status === "completed";
   const isActive = tournament?.status === "active";
 
-  // Group matches by round
   const matchesByRound: { [round: number]: Match[] } = {};
   matches.forEach(m => {
     if (!matchesByRound[m.round]) matchesByRound[m.round] = [];
@@ -239,11 +290,37 @@ export default function FixturesPage() {
   if (loading) return (
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
-      <main className="flex-1 md:ml-56 flex items-center justify-center">
-        <p className="text-cyan-400">Loading...</p>
-      </main>
+      <main className="flex-1 md:ml-56 flex items-center justify-center"><p className="text-cyan-400">Loading...</p></main>
     </div>
   );
+
+  // FIX 5: Congrats screen
+  if (showCongrats) {
+    return (
+      <div className="fixed inset-0 bg-[#0A0A0A] flex items-center justify-center z-50">
+        <div className="text-center px-8 animate-pulse">
+          <div className="text-8xl mb-6">🏆</div>
+          <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4">
+            Congratulations!
+          </h1>
+          <p className="text-cyan-400 text-2xl md:text-3xl font-bold mb-3">{winnerName}</p>
+          <p className="text-gray-500 text-lg mb-8">Tournament Champion 👑</p>
+          <div className="flex justify-center gap-2 mb-8">
+            {["🥇", "⚽", "🎉", "⚡", "🔥"].map((emoji, i) => (
+              <span key={i} className="text-3xl">{emoji}</span>
+            ))}
+          </div>
+          <p className="text-gray-600 text-sm">Redirecting in 5 seconds...</p>
+          <button
+            onClick={() => { setShowCongrats(false); router.push("/admin/tournaments"); }}
+            className="mt-4 text-cyan-400 underline text-sm"
+          >
+            Go now →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
@@ -284,7 +361,6 @@ export default function FixturesPage() {
               </button>
             )}
 
-            {/* Matches grouped by round */}
             {Object.entries(matchesByRound).map(([round, roundMatches]) => (
               <div key={round} className="mb-8">
                 <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">Round {round}</p>
@@ -300,11 +376,11 @@ export default function FixturesPage() {
                         setAwayScore(m.away_score.toString());
                         setShowGoals(false);
                       }}
-                      className={`bg-[#111] rounded-xl p-4 border ${
+                      className={`bg-[#111] rounded-xl p-4 border transition ${
                         m.status !== "completed" && isActive
                           ? "border-[#333] cursor-pointer hover:border-cyan-400"
                           : "border-[#1A1A1A]"
-                      } transition`}
+                      }`}
                     >
                       <div className="flex justify-between items-center">
                         <span className="text-white font-bold flex-1 text-center text-sm">{m.home_team?.name}</span>
@@ -353,14 +429,26 @@ export default function FixturesPage() {
             <div className="flex items-center justify-center gap-4 mb-6">
               <div className="flex flex-col items-center">
                 <p className="text-gray-500 text-xs mb-2">{scoringMatch.home_team?.name}</p>
-                <input type="number" value={homeScore} onChange={(e) => setHomeScore(e.target.value)}
-                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center" />
+                {/* FIX 2: min="0" to block negative scores */}
+                <input
+                  type="number"
+                  min="0"
+                  value={homeScore}
+                  onChange={(e) => setHomeScore(String(Math.max(0, parseInt(e.target.value) || 0)))}
+                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center"
+                />
               </div>
               <span className="text-gray-600 text-2xl font-bold">-</span>
               <div className="flex flex-col items-center">
                 <p className="text-gray-500 text-xs mb-2">{scoringMatch.away_team?.name}</p>
-                <input type="number" value={awayScore} onChange={(e) => setAwayScore(e.target.value)}
-                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center" />
+                {/* FIX 2: min="0" to block negative scores */}
+                <input
+                  type="number"
+                  min="0"
+                  value={awayScore}
+                  onChange={(e) => setAwayScore(String(Math.max(0, parseInt(e.target.value) || 0)))}
+                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center"
+                />
               </div>
             </div>
             <button onClick={updateScore} className="w-full bg-cyan-400 text-black font-bold py-4 rounded-lg mb-3">SAVE SCORE</button>
@@ -374,10 +462,13 @@ export default function FixturesPage() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center px-4 z-50">
           <div className="bg-[#111] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-cyan-400 text-xl font-bold mb-2">⚽ Goal Scorers</h2>
-            <p className="text-white text-center mb-1">{scoringMatch?.home_team?.name} <span className="text-cyan-400">{homeScore}</span> - <span className="text-cyan-400">{awayScore}</span> {scoringMatch?.away_team?.name}</p>
+            <p className="text-white text-center mb-1">
+              {scoringMatch?.home_team?.name} <span className="text-cyan-400">{homeScore}</span> - <span className="text-cyan-400">{awayScore}</span> {scoringMatch?.away_team?.name}
+            </p>
             <p className="text-orange-500 text-xs text-center mb-5">
               Enter exactly {expectedHome} goal{expectedHome !== 1 ? "s" : ""} for {scoringMatch?.home_team?.name} and {expectedAway} goal{expectedAway !== 1 ? "s" : ""} for {scoringMatch?.away_team?.name}
             </p>
+
             <div className="mb-5">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-orange-500 text-sm font-bold">{scoringMatch?.home_team?.name}</p>
@@ -394,6 +485,7 @@ export default function FixturesPage() {
                 </div>
               ))}
             </div>
+
             <div className="mb-6">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-orange-500 text-sm font-bold">{scoringMatch?.away_team?.name}</p>
@@ -410,6 +502,7 @@ export default function FixturesPage() {
                 </div>
               ))}
             </div>
+
             <button onClick={saveGoals} className="w-full bg-cyan-400 text-black font-bold py-4 rounded-lg mb-3">SAVE GOALS</button>
             <button onClick={skipGoals} className="w-full text-gray-500 py-3 text-sm">Skip — No goals to track</button>
           </div>

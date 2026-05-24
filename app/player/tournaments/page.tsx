@@ -121,6 +121,13 @@ export default function PlayerTournaments() {
           <h1 className="text-cyan-400 text-2xl font-bold">⚔️ FutKnight</h1>
           {playerName && <p className="text-gray-500 text-sm mt-0.5">Welcome, <span className="text-white font-bold">{playerName}</span></p>}
         </div>
+<button
+  onClick={() => router.push("/player/profile")}
+  className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-4 py-2 rounded-lg hover:border-cyan-400 text-sm"
+>
+  👤 Profile
+</button>		
+		
         <button
           onClick={handleLogout}
           className="bg-[#1A1A1A] border border-[#333] text-gray-400 px-4 py-2 rounded-lg hover:border-gray-500 text-sm"
