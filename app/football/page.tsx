@@ -5,31 +5,13 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const LEAGUES = [
-  { id: 2021, name: "Premier League", country: "England", flag: "England", afId: 39 },
-  { id: 2014, name: "La Liga", country: "Spain", flag: "Spain", afId: 140 },
-  { id: 2019, name: "Serie A", country: "Italy", flag: "Italy", afId: 135 },
-  { id: 2002, name: "Bundesliga", country: "Germany", flag: "Germany", afId: 78 },
-  { id: 2015, name: "Ligue 1", country: "France", flag: "France", afId: 61 },
-  { id: 2001, name: "Champions League", country: "Europe", flag: "Europe", afId: 2 },
+  { id: 2021, name: "Premier League", country: "England", afId: 39 },
+  { id: 2014, name: "La Liga", country: "Spain", afId: 140 },
+  { id: 2019, name: "Serie A", country: "Italy", afId: 135 },
+  { id: 2002, name: "Bundesliga", country: "Germany", afId: 78 },
+  { id: 2015, name: "Ligue 1", country: "France", afId: 61 },
+  { id: 2001, name: "Champions League", country: "Europe", afId: 2 },
 ];
-
-const LEAGUE_FLAGS: { [key: string]: string } = {
-  England: "England",
-  Spain: "Spain",
-  Italy: "Italy",
-  Germany: "Germany",
-  France: "France",
-  Europe: "Europe",
-};
-
-const LEAGUE_EMOJIS: { [key: string]: string } = {
-  England: "England",
-  Spain: "Spain",
-  Italy: "Italy",
-  Germany: "Germany",
-  France: "France",
-  Europe: "Europe",
-};
 
 const currentSeason = new Date().getMonth() >= 7
   ? new Date().getFullYear()
@@ -40,13 +22,15 @@ export default function FootballHub() {
   const supabase = createClient();
 
   const [selectedLeague, setSelectedLeague] = useState(LEAGUES[0]);
-  const [tab, setTab] = useState<"standings" | "fixtures" | "results" | "scorers">("standings");
+  const [tab, setTab] = useState<"live" | "standings" | "fixtures" | "results" | "scorers">("live");
   const [standings, setStandings] = useState<any[]>([]);
   const [fixtures, setFixtures] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
   const [scorers, setScorers] = useState<any[]>([]);
+  const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -54,11 +38,28 @@ export default function FootballHub() {
     });
   }, [supabase, router]);
 
+  const fetchLive = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/football?type=af&path=fixtures%3Flive=all");
+      const data = await res.json();
+      setLiveMatches(data.response || []);
+      setLastUpdated(new Date());
+    } catch {
+      setError("Failed to load live scores.");
+    }
+    setLoading(false);
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      if (tab === "standings") {
+      if (tab === "live") {
+        await fetchLive();
+        return;
+      } else if (tab === "standings") {
         const res = await fetch(
           `/api/football?type=fd&path=competitions/${selectedLeague.id}/standings%3Fseason=${currentSeason}`
         );
@@ -96,7 +97,7 @@ export default function FootballHub() {
       setError("Failed to load data. Please try again.");
     }
     setLoading(false);
-  }, [selectedLeague, tab]);
+  }, [selectedLeague, tab, fetchLive]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -105,23 +106,20 @@ export default function FootballHub() {
     return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
-  const leagueEmoji: { [key: number]: string } = {
-    2021: "England",
-    2014: "Spain",
-    2019: "Italy",
-    2002: "Germany",
-    2015: "France",
-    2001: "Europe",
-  };
+  function formatLastUpdated() {
+    if (!lastUpdated) return "";
+    const diff = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
+    if (diff < 60) return "just now";
+    return `${Math.floor(diff / 60)} min ago`;
+  }
 
-  const flagEmoji: { [key: string]: string } = {
-    England: "EN",
-    Spain: "ES",
-    Italy: "IT",
-    Germany: "DE",
-    France: "FR",
-    Europe: "EU",
-  };
+  function getMatchStatus(m: any) {
+    const status = m.fixture.status;
+    if (status.short === "HT") return { label: "HALF TIME", color: "text-orange-500" };
+    if (status.short === "FT") return { label: "FT", color: "text-gray-500" };
+    if (status.elapsed) return { label: status.elapsed + "'", color: "text-red-400" };
+    return { label: status.long, color: "text-gray-500" };
+  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
@@ -133,46 +131,133 @@ export default function FootballHub() {
       </nav>
 
       <main className="px-4 md:px-10 py-8 max-w-5xl mx-auto">
-        {/* League selector */}
-        <div className="flex gap-2 flex-wrap mb-6">
-          {LEAGUES.map(league => (
-            <button
-              key={league.id}
-              onClick={() => setSelectedLeague(league)}
-              className={"px-3 py-2 rounded-xl text-sm font-bold transition border " + (
-                selectedLeague.id === league.id
-                  ? "bg-cyan-400 text-black border-cyan-400"
-                  : "bg-[#111] text-gray-500 border-[#222] hover:border-cyan-400 hover:text-white"
-              )}
-            >
-              {league.name}
-            </button>
-          ))}
-        </div>
+
+        {/* League selector — hidden on live tab */}
+        {tab !== "live" && (
+          <div className="flex gap-2 flex-wrap mb-6">
+            {LEAGUES.map(league => (
+              <button
+                key={league.id}
+                onClick={() => setSelectedLeague(league)}
+                className={"px-3 py-2 rounded-xl text-sm font-bold transition border " + (
+                  selectedLeague.id === league.id
+                    ? "bg-cyan-400 text-black border-cyan-400"
+                    : "bg-[#111] text-gray-500 border-[#222] hover:border-cyan-400 hover:text-white"
+                )}
+              >
+                {league.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Tabs */}
-        <div className="flex border-b border-[#222] mb-6">
-          {(["standings", "fixtures", "results", "scorers"] as const).map(t => (
+        <div className="flex border-b border-[#222] mb-6 overflow-x-auto">
+          {(["live", "standings", "fixtures", "results", "scorers"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={"px-5 py-2.5 font-bold text-sm " + (
+              className={"px-4 py-2.5 font-bold text-sm whitespace-nowrap " + (
                 tab === t ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400"
               )}>
-              {t === "standings" ? "Standings" : t === "fixtures" ? "Fixtures" : t === "results" ? "Results" : "Top Scorers"}
+              {t === "live" ? "Live" : t === "standings" ? "Standings" : t === "fixtures" ? "Fixtures" : t === "results" ? "Results" : "Top Scorers"}
+              {t === "live" && liveMatches.length > 0 && (
+                <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{liveMatches.length}</span>
+              )}
             </button>
           ))}
         </div>
 
-        {loading ? (
+        {/* Live tab header */}
+        {tab === "live" && (
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-white font-extrabold">Live Scores</span>
+              </div>
+              {lastUpdated && <p className="text-gray-600 text-xs mt-0.5">Updated {formatLastUpdated()}</p>}
+            </div>
+            <button
+              onClick={fetchLive}
+              disabled={loading}
+              className="flex items-center gap-2 bg-[#111] border border-[#333] text-cyan-400 px-4 py-2 rounded-lg hover:border-cyan-400 transition text-sm font-bold disabled:opacity-50"
+            >
+              {loading ? "..." : "Refresh"}
+            </button>
+          </div>
+        )}
+
+        {loading && tab !== "live" ? (
           <div className="text-center py-20"><p className="text-cyan-400">Loading...</p></div>
         ) : error ? (
           <div className="text-center py-20">
-            <p className="text-4xl mb-4">Soccer ball</p>
             <p className="text-white font-bold">{error}</p>
-            <p className="text-gray-600 text-sm mt-2">This league may not be available for the current season yet</p>
             <button onClick={fetchData} className="mt-4 text-cyan-400 text-sm underline">Try again</button>
           </div>
         ) : (
           <>
+            {/* Live Scores */}
+            {tab === "live" && (
+              loading ? (
+                <div className="text-center py-20"><p className="text-cyan-400">Loading live scores...</p></div>
+              ) : liveMatches.length === 0 ? (
+                <div className="text-center py-20">
+                  <p className="text-5xl mb-4">No live matches</p>
+                  <p className="text-white font-bold text-lg">No live matches right now</p>
+                  <p className="text-gray-600 text-sm mt-2">Check back during match days or hit Refresh</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {liveMatches.map((m: any) => {
+                    const status = getMatchStatus(m);
+                    return (
+                      <div key={m.fixture.id} className="bg-[#111] border border-red-500/30 rounded-xl p-4">
+                        {/* League + status */}
+                        <div className="flex justify-between items-center mb-3">
+                          <div className="flex items-center gap-1.5">
+                            {m.league.logo && (
+                              <img src={m.league.logo} alt={m.league.name} className="w-4 h-4 object-contain" />
+                            )}
+                            <span className="text-gray-600 text-xs">{m.league.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {status.label !== "HALF TIME" && status.label !== "FT" && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            )}
+                            <span className={"text-xs font-bold " + status.color}>{status.label}</span>
+                          </div>
+                        </div>
+
+                        {/* Match */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1">
+                            {m.teams.home.logo && (
+                              <img src={m.teams.home.logo} alt={m.teams.home.name} className="w-7 h-7 object-contain" />
+                            )}
+                            <span className={"font-bold text-sm " + (m.goals.home > m.goals.away ? "text-white" : "text-gray-400")}>
+                              {m.teams.home.name}
+                            </span>
+                          </div>
+                          <div className="px-4 text-center">
+                            <span className="text-cyan-400 font-extrabold text-2xl">
+                              {m.goals.home ?? 0} - {m.goals.away ?? 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-1 justify-end">
+                            <span className={"font-bold text-sm " + (m.goals.away > m.goals.home ? "text-white" : "text-gray-400")}>
+                              {m.teams.away.name}
+                            </span>
+                            {m.teams.away.logo && (
+                              <img src={m.teams.away.logo} alt={m.teams.away.name} className="w-7 h-7 object-contain" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
             {/* Standings */}
             {tab === "standings" && standings.length > 0 && (
               <div>
@@ -194,9 +279,7 @@ export default function FootballHub() {
                       {row.position}
                     </span>
                     <div className="flex-1 flex items-center gap-2">
-                      {row.team.crest && (
-                        <img src={row.team.crest} alt={row.team.name} className="w-5 h-5 object-contain" />
-                      )}
+                      {row.team.crest && <img src={row.team.crest} alt={row.team.name} className="w-5 h-5 object-contain" />}
                       <span className="text-white font-bold text-sm">{row.team.shortName || row.team.name}</span>
                     </div>
                     <span className="w-10 text-center text-gray-400 text-sm hidden md:block">{row.playedGames}</span>
