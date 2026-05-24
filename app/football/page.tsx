@@ -13,21 +13,34 @@ const LEAGUES = [
   { id: 2001, name: "Champions League", country: "Europe", afId: 2 },
 ];
 
+const LEAGUE_PRIORITY: { [key: number]: number } = {
+  2: 1, 39: 2, 140: 3, 135: 4, 78: 5, 61: 6,
+};
+
 const currentSeason = new Date().getMonth() >= 7
   ? new Date().getFullYear()
   : new Date().getFullYear() - 1;
+
+const NEWS_TABS = [
+  { key: "hot", label: "Hot News", query: "football news today" },
+  { key: "transfers", label: "Transfers", query: "football transfer news" },
+  { key: "pl", label: "Premier League", query: "premier league news" },
+  { key: "cl", label: "Champions League", query: "champions league news" },
+];
 
 export default function FootballHub() {
   const router = useRouter();
   const supabase = createClient();
 
   const [selectedLeague, setSelectedLeague] = useState(LEAGUES[0]);
-  const [tab, setTab] = useState<"live" | "standings" | "fixtures" | "results" | "scorers">("live");
+  const [tab, setTab] = useState<"live" | "standings" | "fixtures" | "results" | "scorers" | "news">("live");
   const [standings, setStandings] = useState<any[]>([]);
   const [fixtures, setFixtures] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
   const [scorers, setScorers] = useState<any[]>([]);
   const [liveMatches, setLiveMatches] = useState<any[]>([]);
+  const [news, setNews] = useState<any[]>([]);
+  const [newsTab, setNewsTab] = useState("hot");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -44,10 +57,28 @@ export default function FootballHub() {
     try {
       const res = await fetch("/api/football?type=af&path=fixtures%3Flive=all");
       const data = await res.json();
-      setLiveMatches(data.response || []);
+      const sorted = (data.response || []).sort((a: any, b: any) => {
+        const pa = LEAGUE_PRIORITY[a.league.id] || 99;
+        const pb = LEAGUE_PRIORITY[b.league.id] || 99;
+        return pa - pb;
+      });
+      setLiveMatches(sorted);
       setLastUpdated(new Date());
     } catch {
       setError("Failed to load live scores.");
+    }
+    setLoading(false);
+  }, []);
+
+  const fetchNews = useCallback(async (query: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/football?type=news&path=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setNews(data.articles || []);
+    } catch {
+      setError("Failed to load news.");
     }
     setLoading(false);
   }, []);
@@ -59,10 +90,12 @@ export default function FootballHub() {
       if (tab === "live") {
         await fetchLive();
         return;
+      } else if (tab === "news") {
+        const selected = NEWS_TABS.find(t => t.key === newsTab);
+        await fetchNews(selected?.query || "football news");
+        return;
       } else if (tab === "standings") {
-        const res = await fetch(
-          `/api/football?type=fd&path=competitions/${selectedLeague.id}/standings%3Fseason=${currentSeason}`
-        );
+        const res = await fetch(`/api/football?type=fd&path=competitions/${selectedLeague.id}/standings%3Fseason=${currentSeason}`);
         const data = await res.json();
         if (data.standings) {
           setStandings(data.standings[0]?.table || []);
@@ -73,33 +106,35 @@ export default function FootballHub() {
       } else if (tab === "fixtures") {
         const today = new Date().toISOString().split("T")[0];
         const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-        const res = await fetch(
-          `/api/football?type=fd&path=competitions/${selectedLeague.id}/matches%3FdateFrom=${today}%26dateTo=${future}%26status=SCHEDULED`
-        );
+        const res = await fetch(`/api/football?type=fd&path=competitions/${selectedLeague.id}/matches%3FdateFrom=${today}%26dateTo=${future}%26status=SCHEDULED`);
         const data = await res.json();
         setFixtures(data.matches?.slice(0, 20) || []);
       } else if (tab === "results") {
         const past = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
         const today = new Date().toISOString().split("T")[0];
-        const res = await fetch(
-          `/api/football?type=fd&path=competitions/${selectedLeague.id}/matches%3FdateFrom=${past}%26dateTo=${today}%26status=FINISHED`
-        );
+        const res = await fetch(`/api/football?type=fd&path=competitions/${selectedLeague.id}/matches%3FdateFrom=${past}%26dateTo=${today}%26status=FINISHED`);
         const data = await res.json();
         setResults((data.matches || []).reverse().slice(0, 20));
       } else if (tab === "scorers") {
-        const res = await fetch(
-          `/api/football?type=af&path=players/topscorers%3Fleague=${selectedLeague.afId}%26season=${currentSeason}`
-        );
+        const res = await fetch(`/api/football?type=af&path=players/topscorers%3Fleague=${selectedLeague.afId}%26season=${currentSeason}`);
         const data = await res.json();
         setScorers(data.response?.slice(0, 20) || []);
       }
     } catch {
-      setError("Failed to load data. Please try again.");
+      setError("Failed to load data.");
     }
     setLoading(false);
-  }, [selectedLeague, tab, fetchLive]);
+  }, [selectedLeague, tab, newsTab, fetchLive, fetchNews]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // When news sub-tab changes, refetch
+  useEffect(() => {
+    if (tab === "news") {
+      const selected = NEWS_TABS.find(t => t.key === newsTab);
+      fetchNews(selected?.query || "football news");
+    }
+  }, [newsTab, tab, fetchNews]);
 
   function formatDate(dateStr: string) {
     const d = new Date(dateStr);
@@ -113,6 +148,13 @@ export default function FootballHub() {
     return `${Math.floor(diff / 60)} min ago`;
   }
 
+  function timeAgo(dateStr: string) {
+    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }
+
   function getMatchStatus(m: any) {
     const status = m.fixture.status;
     if (status.short === "HT") return { label: "HALF TIME", color: "text-orange-500" };
@@ -121,9 +163,15 @@ export default function FootballHub() {
     return { label: status.long, color: "text-gray-500" };
   }
 
+  const liveByLeague: { [key: string]: { logo: string; matches: any[] } } = {};
+  liveMatches.forEach((m: any) => {
+    const name = m.league.name;
+    if (!liveByLeague[name]) liveByLeague[name] = { logo: m.league.logo, matches: [] };
+    liveByLeague[name].matches.push(m);
+  });
+
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
-      {/* Navbar */}
       <nav className="border-b border-[#111] px-4 md:px-10 py-4 flex justify-between items-center sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-sm z-40">
         <button onClick={() => router.back()} className="text-orange-500 text-sm">Back</button>
         <span className="text-cyan-400 font-extrabold">Football Hub</span>
@@ -132,33 +180,30 @@ export default function FootballHub() {
 
       <main className="px-4 md:px-10 py-8 max-w-5xl mx-auto">
 
-        {/* League selector — hidden on live tab */}
-        {tab !== "live" && (
+        {/* League selector — only for non-live, non-news tabs */}
+        {tab !== "live" && tab !== "news" && (
           <div className="flex gap-2 flex-wrap mb-6">
             {LEAGUES.map(league => (
-              <button
-                key={league.id}
-                onClick={() => setSelectedLeague(league)}
+              <button key={league.id} onClick={() => setSelectedLeague(league)}
                 className={"px-3 py-2 rounded-xl text-sm font-bold transition border " + (
                   selectedLeague.id === league.id
                     ? "bg-cyan-400 text-black border-cyan-400"
                     : "bg-[#111] text-gray-500 border-[#222] hover:border-cyan-400 hover:text-white"
-                )}
-              >
+                )}>
                 {league.name}
               </button>
             ))}
           </div>
         )}
 
-        {/* Tabs */}
+        {/* Main tabs */}
         <div className="flex border-b border-[#222] mb-6 overflow-x-auto">
-          {(["live", "standings", "fixtures", "results", "scorers"] as const).map(t => (
+          {(["live", "standings", "fixtures", "results", "scorers", "news"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={"px-4 py-2.5 font-bold text-sm whitespace-nowrap " + (
                 tab === t ? "text-cyan-400 border-b-2 border-cyan-400" : "text-gray-600 hover:text-gray-400"
               )}>
-              {t === "live" ? "Live" : t === "standings" ? "Standings" : t === "fixtures" ? "Fixtures" : t === "results" ? "Results" : "Top Scorers"}
+              {t === "live" ? "Live" : t === "standings" ? "Standings" : t === "fixtures" ? "Fixtures" : t === "results" ? "Results" : t === "scorers" ? "Top Scorers" : "News"}
               {t === "live" && liveMatches.length > 0 && (
                 <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{liveMatches.length}</span>
               )}
@@ -176,13 +221,26 @@ export default function FootballHub() {
               </div>
               {lastUpdated && <p className="text-gray-600 text-xs mt-0.5">Updated {formatLastUpdated()}</p>}
             </div>
-            <button
-              onClick={fetchLive}
-              disabled={loading}
-              className="flex items-center gap-2 bg-[#111] border border-[#333] text-cyan-400 px-4 py-2 rounded-lg hover:border-cyan-400 transition text-sm font-bold disabled:opacity-50"
-            >
+            <button onClick={fetchLive} disabled={loading}
+              className="bg-[#111] border border-[#333] text-cyan-400 px-4 py-2 rounded-lg hover:border-cyan-400 transition text-sm font-bold disabled:opacity-50">
               {loading ? "..." : "Refresh"}
             </button>
+          </div>
+        )}
+
+        {/* News sub-tabs */}
+        {tab === "news" && (
+          <div className="flex gap-2 flex-wrap mb-6">
+            {NEWS_TABS.map(nt => (
+              <button key={nt.key} onClick={() => setNewsTab(nt.key)}
+                className={"px-3 py-2 rounded-xl text-sm font-bold transition border " + (
+                  newsTab === nt.key
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "bg-[#111] text-gray-500 border-[#222] hover:border-orange-500 hover:text-white"
+                )}>
+                {nt.label}
+              </button>
+            ))}
           </div>
         )}
 
@@ -195,65 +253,86 @@ export default function FootballHub() {
           </div>
         ) : (
           <>
-            {/* Live Scores */}
+            {/* Live */}
             {tab === "live" && (
               loading ? (
-                <div className="text-center py-20"><p className="text-cyan-400">Loading live scores...</p></div>
+                <div className="text-center py-20"><p className="text-cyan-400">Loading...</p></div>
               ) : liveMatches.length === 0 ? (
                 <div className="text-center py-20">
-                  <p className="text-5xl mb-4">No live matches</p>
                   <p className="text-white font-bold text-lg">No live matches right now</p>
                   <p className="text-gray-600 text-sm mt-2">Check back during match days or hit Refresh</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {liveMatches.map((m: any) => {
-                    const status = getMatchStatus(m);
-                    return (
-                      <div key={m.fixture.id} className="bg-[#111] border border-red-500/30 rounded-xl p-4">
-                        {/* League + status */}
-                        <div className="flex justify-between items-center mb-3">
-                          <div className="flex items-center gap-1.5">
-                            {m.league.logo && (
-                              <img src={m.league.logo} alt={m.league.name} className="w-4 h-4 object-contain" />
-                            )}
-                            <span className="text-gray-600 text-xs">{m.league.name}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {status.label !== "HALF TIME" && status.label !== "FT" && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                            )}
-                            <span className={"text-xs font-bold " + status.color}>{status.label}</span>
-                          </div>
-                        </div>
+                <div className="flex flex-col gap-6">
+                  {Object.entries(liveByLeague).map(([leagueName, leagueData]) => (
+                    <div key={leagueName}>
+                      <div className="flex items-center gap-2 mb-3">
+                        {leagueData.logo && <img src={leagueData.logo} alt={leagueName} className="w-5 h-5 object-contain" />}
+                        <span className="text-gray-400 text-sm font-bold">{leagueName}</span>
+                        <div className="flex-1 h-px bg-[#1A1A1A]" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {leagueData.matches.map((m: any) => {
+                          const status = getMatchStatus(m);
+                          return (
+                            <div key={m.fixture.id} className="bg-[#111] border border-red-500/20 rounded-xl p-4">
+                              <div className="flex justify-between items-center mb-3">
+                                <span className="text-gray-600 text-xs">{m.league.round?.replace("Regular Season - ", "")}</span>
+                                <div className="flex items-center gap-1.5">
+                                  {status.label !== "HALF TIME" && status.label !== "FT" && (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                  )}
+                                  <span className={"text-xs font-bold " + status.color}>{status.label}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 flex-1">
+                                  {m.teams.home.logo && <img src={m.teams.home.logo} alt={m.teams.home.name} className="w-7 h-7 object-contain" />}
+                                  <span className={"font-bold text-sm " + (m.goals.home > m.goals.away ? "text-white" : "text-gray-400")}>{m.teams.home.name}</span>
+                                </div>
+                                <div className="px-4 text-center">
+                                  <span className="text-cyan-400 font-extrabold text-2xl">{m.goals.home ?? 0} - {m.goals.away ?? 0}</span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-1 justify-end">
+                                  <span className={"font-bold text-sm " + (m.goals.away > m.goals.home ? "text-white" : "text-gray-400")}>{m.teams.away.name}</span>
+                                  {m.teams.away.logo && <img src={m.teams.away.logo} alt={m.teams.away.name} className="w-7 h-7 object-contain" />}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
 
-                        {/* Match */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 flex-1">
-                            {m.teams.home.logo && (
-                              <img src={m.teams.home.logo} alt={m.teams.home.name} className="w-7 h-7 object-contain" />
-                            )}
-                            <span className={"font-bold text-sm " + (m.goals.home > m.goals.away ? "text-white" : "text-gray-400")}>
-                              {m.teams.home.name}
-                            </span>
-                          </div>
-                          <div className="px-4 text-center">
-                            <span className="text-cyan-400 font-extrabold text-2xl">
-                              {m.goals.home ?? 0} - {m.goals.away ?? 0}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-1 justify-end">
-                            <span className={"font-bold text-sm " + (m.goals.away > m.goals.home ? "text-white" : "text-gray-400")}>
-                              {m.teams.away.name}
-                            </span>
-                            {m.teams.away.logo && (
-                              <img src={m.teams.away.logo} alt={m.teams.away.name} className="w-7 h-7 object-contain" />
-                            )}
-                          </div>
+            {/* News */}
+            {tab === "news" && (
+              news.length === 0 ? (
+                <div className="text-center py-20"><p className="text-white font-bold">No news available</p></div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {news.map((article: any, i: number) => (
+                    <a key={i} href={article.url} target="_blank" rel="noopener noreferrer"
+                      className="flex gap-4 bg-[#111] border border-[#1A1A1A] rounded-2xl p-4 hover:border-cyan-400 transition group">
+                      {article.image && (
+                        <img src={article.image} alt={article.title}
+                          className="w-24 h-20 md:w-32 md:h-24 object-cover rounded-xl shrink-0 bg-[#222]"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-bold text-sm leading-snug group-hover:text-cyan-400 transition line-clamp-2">{article.title}</p>
+                        <p className="text-gray-500 text-xs mt-1.5 line-clamp-2">{article.description}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-orange-500 text-xs font-bold">{article.source?.name}</span>
+                          <span className="text-gray-600 text-xs">·</span>
+                          <span className="text-gray-600 text-xs">{timeAgo(article.publishedAt)}</span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </a>
+                  ))}
                 </div>
               )
             )}
@@ -273,9 +352,7 @@ export default function FootballHub() {
                 </div>
                 {standings.map((row: any, i: number) => (
                   <div key={row.team.id} className={"flex items-center py-3 px-4 rounded-lg " + (i % 2 === 0 ? "bg-[#111]" : "")}>
-                    <span className={"w-8 text-sm font-bold " + (
-                      i < 4 ? "text-cyan-400" : i < 6 ? "text-orange-500" : i >= standings.length - 3 ? "text-red-500" : "text-gray-500"
-                    )}>
+                    <span className={"w-8 text-sm font-bold " + (i < 4 ? "text-cyan-400" : i < 6 ? "text-orange-500" : i >= standings.length - 3 ? "text-red-500" : "text-gray-500")}>
                       {row.position}
                     </span>
                     <div className="flex-1 flex items-center gap-2">
