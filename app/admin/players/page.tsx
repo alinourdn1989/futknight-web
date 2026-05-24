@@ -79,7 +79,7 @@ export default function AdminPlayers() {
       setSearching(true);
       try {
         const res = await fetch(
-          `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&season=2024`,
+          `https://v3.football.api-sports.io/players?search=${encodeURIComponent(searchQuery)}&league=39&season=2024`,
           {
             headers: {
               "x-apisports-key": process.env.NEXT_PUBLIC_API_FOOTBALL_KEY!,
@@ -182,7 +182,7 @@ export default function AdminPlayers() {
           <div>
             <h1 className="text-white text-2xl font-extrabold">Players</h1>
             <p className="text-gray-600 text-sm mt-0.5">
-              {players.length} total ¡¤ {players.filter(p => p.user_id).length} registered ¡¤ {players.filter(p => p.api_player_id).length} linked to real players
+              {players.length} total · {players.filter(p => p.user_id).length} registered · {players.filter(p => p.api_player_id).length} linked to real players
             </p>
           </div>
           <button onClick={openAdd} className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-lg hover:bg-orange-400 transition text-sm">
@@ -262,7 +262,7 @@ export default function AdminPlayers() {
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-bold text-sm truncate">{result.player.name}</p>
                         <p className="text-gray-500 text-xs">
-                          {result.statistics[0]?.team.name} ¡¤ {result.statistics[0]?.games.position} ¡¤ {result.player.nationality}
+                          {result.statistics[0]?.team.name} · {result.statistics[0]?.games.position} · {result.player.nationality}
                         </p>
                       </div>
                       {result.statistics[0]?.games.rating && (
@@ -286,7 +286,7 @@ export default function AdminPlayers() {
                 />
                 <div className="flex-1">
                   <p className="text-white font-bold text-sm">{selectedApiPlayer.player.name}</p>
-                  <p className="text-gray-500 text-xs">{selectedApiPlayer.statistics[0]?.team.name} ¡¤ {selectedApiPlayer.player.nationality}</p>
+                  <p className="text-gray-500 text-xs">{selectedApiPlayer.statistics[0]?.team.name} · {selectedApiPlayer.player.nationality}</p>
                 </div>
                 <button onClick={() => { setSelectedApiPlayer(null); setSearchQuery(""); }} className="text-gray-600 hover:text-red-400 text-lg">?</button>
               </div>
@@ -334,7 +334,7 @@ function PlayerCard({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () => voi
         <div className="flex-1 min-w-0">
           <p className="text-white font-extrabold truncate">{p.player_name}</p>
           {p.club && <p className="text-gray-500 text-xs mt-0.5">{p.club}</p>}
-          {p.nationality && <p className="text-gray-600 text-xs">{p.nationality} ¡¤ {p.position}</p>}
+          {p.nationality && <p className="text-gray-600 text-xs">{p.nationality} · {p.position}</p>}
         </div>
         {p.rating && (
           <div className="bg-[#001A1A] border border-cyan-400 rounded-lg px-2.5 py-1.5 text-center shrink-0">
@@ -372,7 +372,7 @@ function PlayerCardMobile({ p, onEdit, onDelete }: { p: AdminPlayer; onEdit: () 
       )}
       <div className="flex-1 min-w-0">
         <p className="text-white font-bold truncate">{p.player_name}</p>
-        {p.club && <p className="text-gray-500 text-xs">{p.club} ¡¤ {p.position}</p>}
+        {p.club && <p className="text-gray-500 text-xs">{p.club} · {p.position}</p>}
         <p className="text-gray-600 text-xs mt-0.5">{p.player_email || p.player_phone || "No contact"}</p>
         <p className={`text-xs font-bold mt-0.5 ${p.user_id ? "text-cyan-400" : "text-orange-500"}`}>
           {p.user_id ? "? Registered" : "? Pending"}
