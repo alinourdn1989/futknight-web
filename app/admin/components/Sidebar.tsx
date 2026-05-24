@@ -1,6 +1,6 @@
-// app/admin/Sidebar.tsx  — shared sidebar component
 "use client";
 
+import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -8,6 +8,7 @@ export default function AdminSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -20,8 +21,8 @@ export default function AdminSidebar() {
     { href: "/admin/players", label: "Players", icon: "👥" },
   ];
 
-  return (
-    <aside className="hidden md:flex flex-col w-56 min-h-screen bg-[#0D0D0D] border-r border-[#1A1A1A] px-4 py-6 fixed left-0 top-0 bottom-0">
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="text-cyan-400 text-lg font-extrabold tracking-tight mb-10 px-2">⚔️ FutKnight</div>
 
@@ -32,7 +33,7 @@ export default function AdminSidebar() {
           return (
             <button
               key={link.href}
-              onClick={() => router.push(link.href)}
+              onClick={() => { router.push(link.href); setMobileOpen(false); }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition ${
                 active
                   ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
@@ -54,6 +55,45 @@ export default function AdminSidebar() {
         <span>↩</span>
         <span>Logout</span>
       </button>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-56 min-h-screen bg-[#0D0D0D] border-r border-[#1A1A1A] px-4 py-6 fixed left-0 top-0 bottom-0">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-4 right-4 z-50 bg-[#111] border border-[#333] text-white w-10 h-10 rounded-lg flex items-center justify-center text-lg hover:border-cyan-400 transition"
+      >
+        ☰
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setMobileOpen(false)}
+          />
+          {/* Drawer */}
+          <div className="relative w-64 bg-[#0D0D0D] border-r border-[#1A1A1A] px-4 py-6 flex flex-col h-full">
+            {/* Close button */}
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white text-xl"
+            >
+              ✕
+            </button>
+            <SidebarContent />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
