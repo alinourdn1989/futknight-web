@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 
+
+
 export default function LandingPage() {
   const router = useRouter();
 
@@ -137,10 +139,12 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto flex justify-between items-center flex-wrap gap-4">
           <div className="text-cyan-400 font-extrabold">⚔️ FutKnight</div>
           <div className="text-gray-600 text-xs">© 2026 FutKnight. All rights reserved.</div>
-          <div className="flex gap-6">
-            <button onClick={() => router.push("/login")} className="text-gray-600 text-xs hover:text-gray-400 transition">Login</button>
-            <button onClick={() => router.push("/register")} className="text-gray-600 text-xs hover:text-gray-400 transition">Sign Up</button>
-          </div>
+<div className="flex gap-6">
+  <button onClick={() => router.push("/login")} className="text-gray-600 text-xs hover:text-gray-400 transition">Login</button>
+  <button onClick={() => router.push("/register")} className="text-gray-600 text-xs hover:text-gray-400 transition">Sign Up</button>
+  <button onClick={() => router.push("/privacy")} className="text-gray-600 text-xs hover:text-gray-400 transition">Privacy Policy</button>
+  <button onClick={() => router.push("/support")} className="text-gray-600 text-xs hover:text-gray-400 transition">Support</button>
+</div>
         </div>
       </footer>
     </div>
