@@ -115,23 +115,24 @@ export default function PlayerH2H() {
     );
     setPendingApproval(needsMyApproval);
 
-    // Group by opponent
+    // Group by opponent - include ALL matches, only count stats for approved
     const opponentMap: { [userId: string]: Opponent } = {};
     for (const m of (matches || [])) {
-      if (m.status !== "approved") continue;
       const isP1 = m.player1_id === user.id;
       const oppId = isP1 ? m.player2_id : m.player1_id;
       const oppName = isP1 ? m.player2_name : m.player1_name;
-      const myScore = isP1 ? m.player1_score : m.player2_score;
-      const theirScore = isP1 ? m.player2_score : m.player1_score;
 
       if (!opponentMap[oppId]) opponentMap[oppId] = { name: oppName, userId: oppId, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, matches: [] };
+      opponentMap[oppId].matches.push(m);
+
+      if (m.status !== "approved") continue;
+      const myScore = isP1 ? m.player1_score : m.player2_score;
+      const theirScore = isP1 ? m.player2_score : m.player1_score;
       opponentMap[oppId].goalsFor += myScore;
       opponentMap[oppId].goalsAgainst += theirScore;
       if (myScore > theirScore) opponentMap[oppId].wins++;
       else if (myScore === theirScore) opponentMap[oppId].draws++;
       else opponentMap[oppId].losses++;
-      opponentMap[oppId].matches.push(m);
     }
     setOpponents(Object.values(opponentMap).sort((a, b) => (b.wins + b.draws + b.losses) - (a.wins + a.draws + a.losses)));
     setLoading(false);
