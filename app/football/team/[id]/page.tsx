@@ -124,7 +124,7 @@ export default function TeamDetails() {
           <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-5 mb-6">
             <h3 className="text-white font-bold mb-3">Recent Form</h3>
             <div className="flex gap-2">
-              {formArr.map((r, i) => (
+              {formArr.map((r: string, i: number) => (
                 <div key={i} className={`w-10 h-10 rounded-full flex items-center justify-center font-extrabold text-sm ${formColor(r)}`}>{r}</div>
               ))}
             </div>
