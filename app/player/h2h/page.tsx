@@ -31,8 +31,10 @@ type H2HMatch = {
 };
 
 type Opponent = {
+  key: string;
   name: string;
   userId: string;
+  game: string;
   wins: number;
   draws: number;
   losses: number;
@@ -49,6 +51,14 @@ type RosterPlayer = {
 
 const GAMES = ["FIFA", "CoD", "NBA 2K", "Rocket League", "Other"];
 
+const GAME_COLORS: { [key: string]: string } = {
+  "FIFA": "text-cyan-400 bg-cyan-400/10 border-cyan-400/30",
+  "CoD": "text-orange-400 bg-orange-400/10 border-orange-400/30",
+  "NBA 2K": "text-purple-400 bg-purple-400/10 border-purple-400/30",
+  "Rocket League": "text-blue-400 bg-blue-400/10 border-blue-400/30",
+  "Other": "text-gray-400 bg-gray-400/10 border-gray-400/30",
+};
+
 export default function PlayerH2H() {
   const router = useRouter();
   const supabase = createClient();
@@ -63,14 +73,12 @@ export default function PlayerH2H() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  // Challenge modal
   const [showChallenge, setShowChallenge] = useState(false);
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayer[]>([]);
   const [selectedOpponent, setSelectedOpponent] = useState<RosterPlayer | null>(null);
   const [selectedGame, setSelectedGame] = useState("FIFA");
   const [sending, setSending] = useState(false);
 
-  // Score modal
   const [scoreMatch, setScoreMatch] = useState<H2HMatch | null>(null);
   const [score1, setScore1] = useState("0");
   const [score2, setScore2] = useState("0");
@@ -82,18 +90,15 @@ export default function PlayerH2H() {
     if (!user) { router.push("/login"); return; }
     setMyUserId(user.id);
 
-    // Get my player name
     const { data: tp } = await supabase.from("tournament_players").select("player_name, tournament_id").eq("user_id", user.id).limit(1).single();
     const name = tp?.player_name || "";
     setMyName(name);
 
-    // Get admin_id from tournament_players
     if (tp) {
       const { data: t } = await supabase.from("tournaments").select("created_by").eq("id", tp.tournament_id).single();
       if (t) setAdminId(t.created_by);
     }
 
-    // Get all my challenges
     const { data: challenges } = await supabase.from("h2h_challenges")
       .select("*")
       .or(`challenger_id.eq.${user.id},opponent_id.eq.${user.id}`);
@@ -103,36 +108,35 @@ export default function PlayerH2H() {
     setPendingReceived(received);
     setPendingSent(sent);
 
-    // Get all my H2H matches
     const { data: matches } = await supabase.from("h2h_matches")
       .select("*")
       .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
-      .order("played_at", { ascending: false });
+      .order("played_at", { ascending: true });
 
-    // Pending approval for me
     const needsMyApproval = (matches || []).filter(m =>
       m.status === "pending_approval" && m.score_entered_by !== user.id
     );
     setPendingApproval(needsMyApproval);
 
-    // Group by opponent - include ALL matches, only count stats for approved
-    const opponentMap: { [userId: string]: Opponent } = {};
+    // Group by opponent + game (separate group per game)
+    const opponentMap: { [key: string]: Opponent } = {};
     for (const m of (matches || [])) {
       const isP1 = m.player1_id === user.id;
       const oppId = isP1 ? m.player2_id : m.player1_id;
       const oppName = isP1 ? m.player2_name : m.player1_name;
+      const key = `${oppId}__${m.game}`;
 
-      if (!opponentMap[oppId]) opponentMap[oppId] = { name: oppName, userId: oppId, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, matches: [] };
-      opponentMap[oppId].matches.push(m);
+      if (!opponentMap[key]) opponentMap[key] = { key, name: oppName, userId: oppId, game: m.game, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, matches: [] };
+      opponentMap[key].matches.push(m);
 
       if (m.status !== "approved") continue;
       const myScore = isP1 ? m.player1_score : m.player2_score;
       const theirScore = isP1 ? m.player2_score : m.player1_score;
-      opponentMap[oppId].goalsFor += myScore;
-      opponentMap[oppId].goalsAgainst += theirScore;
-      if (myScore > theirScore) opponentMap[oppId].wins++;
-      else if (myScore === theirScore) opponentMap[oppId].draws++;
-      else opponentMap[oppId].losses++;
+      opponentMap[key].goalsFor += myScore;
+      opponentMap[key].goalsAgainst += theirScore;
+      if (myScore > theirScore) opponentMap[key].wins++;
+      else if (myScore === theirScore) opponentMap[key].draws++;
+      else opponentMap[key].losses++;
     }
     setOpponents(Object.values(opponentMap).sort((a, b) => (b.wins + b.draws + b.losses) - (a.wins + a.draws + a.losses)));
     setLoading(false);
@@ -317,7 +321,7 @@ export default function PlayerH2H() {
             </div>
             <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-4 text-center">
               <p className="text-orange-500 text-2xl font-extrabold">{opponents.length}</p>
-              <p className="text-gray-600 text-xs mt-1">Opponents</p>
+              <p className="text-gray-600 text-xs mt-1">Matchups</p>
             </div>
           </div>
         )}
@@ -334,114 +338,152 @@ export default function PlayerH2H() {
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-1">H2H Records</p>
-            {opponents.map(opp => {
-              const total = opp.wins + opp.draws + opp.losses;
-              const winPct = total > 0 ? Math.round((opp.wins / total) * 100) : 0;
-              const isExpanded = expanded === opp.userId;
+          <>
+            {opponents.length > 0 && <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">H2H Records</p>}
+            <div className="flex flex-col gap-3">
+              {opponents.map(opp => {
+                const approvedMatches = opp.matches.filter(m => m.status === "approved");
+                const pendingScoreMatches = opp.matches.filter(m => m.status === "pending_score");
+                const pendingApprovalMatches = opp.matches.filter(m => m.status === "pending_approval");
+                const total = opp.wins + opp.draws + opp.losses;
+                const winPct = total > 0 ? Math.round((opp.wins / total) * 100) : 0;
+                const isExpanded = expanded === opp.key;
+                const gameColor = GAME_COLORS[opp.game] || GAME_COLORS["Other"];
 
-              // Pending score matches with this opponent
-              const pendingScoreMatches = opp.matches.filter(m => m.status === "pending_score");
-
-              return (
-                <div key={opp.userId} className="bg-[#111] border border-[#1A1A1A] rounded-2xl overflow-hidden">
-                  <button onClick={() => setExpanded(isExpanded ? null : opp.userId)}
-                    className="w-full p-5 text-left">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold shrink-0">
-                          {opp.name[0]?.toUpperCase()}
+                return (
+                  <div key={opp.key} className="bg-[#111] border border-[#1A1A1A] rounded-2xl overflow-hidden">
+                    <button onClick={() => setExpanded(isExpanded ? null : opp.key)} className="w-full p-5 text-left">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold shrink-0">
+                            {opp.name[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-white font-extrabold">{opp.name}</p>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${gameColor}`}>{opp.game}</span>
+                            </div>
+                            <p className="text-gray-600 text-xs mt-0.5">
+                              {total} match{total !== 1 ? "es" : ""}{total > 0 ? ` · ${winPct}% win rate` : ""}
+                              {pendingScoreMatches.length > 0 && <span className="text-orange-500 ml-1">· {pendingScoreMatches.length} score pending</span>}
+                              {pendingApprovalMatches.length > 0 && <span className="text-yellow-500 ml-1">· {pendingApprovalMatches.length} awaiting approval</span>}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-white font-extrabold">{opp.name}</p>
-                          <p className="text-gray-600 text-xs">{total} matches · {winPct}% win rate</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-center">
-                          <p className="text-cyan-400 font-extrabold text-lg">{opp.wins}</p>
-                          <p className="text-gray-600 text-[10px]">W</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-gray-400 font-extrabold text-lg">{opp.draws}</p>
-                          <p className="text-gray-600 text-[10px]">D</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-red-400 font-extrabold text-lg">{opp.losses}</p>
-                          <p className="text-gray-600 text-[10px]">L</p>
-                        </div>
-                        <span className="text-gray-600 text-sm ml-2">{isExpanded ? "v" : ">"}</span>
-                      </div>
-                    </div>
-
-                    {/* Win bar */}
-                    <div className="mt-3 bg-[#222] rounded-full h-1.5 overflow-hidden">
-                      <div className="bg-cyan-400 h-full rounded-full transition-all" style={{ width: winPct + "%" }} />
-                    </div>
-                  </button>
-
-                  {/* Expanded history */}
-                  {isExpanded && (
-                    <div className="border-t border-[#1A1A1A] px-5 pb-5">
-                      {/* Pending score matches */}
-                      {pendingScoreMatches.map(m => {
-                        const isP1 = m.player1_id === myUserId;
-                        const myScore = isP1 ? m.player1_score : m.player2_score;
-                        const theirScore = isP1 ? m.player2_score : m.player1_score;
-                        const canEnterScore = m.status === "pending_score";
-                        return (
-                          <div key={m.id} className="bg-[#1A1A1A] border border-orange-500/20 rounded-xl p-3 mt-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-orange-500 text-xs font-bold">Score pending</p>
-                                <p className="text-gray-500 text-xs">{m.game} · {formatDate(m.played_at)}</p>
+                        <div className="flex items-center gap-3">
+                          {total > 0 && (
+                            <>
+                              <div className="text-center">
+                                <p className="text-cyan-400 font-extrabold text-lg leading-none">{opp.wins}</p>
+                                <p className="text-gray-600 text-[10px]">W</p>
                               </div>
-                              {canEnterScore && (
-                                <button onClick={() => { setScoreMatch(m); setScore1(isP1 ? "0" : "0"); setScore2("0"); }}
-                                  className="text-cyan-400 text-xs font-bold border border-cyan-400 px-3 py-1.5 rounded-lg">
+                              <div className="text-center">
+                                <p className="text-gray-400 font-extrabold text-lg leading-none">{opp.draws}</p>
+                                <p className="text-gray-600 text-[10px]">D</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-red-400 font-extrabold text-lg leading-none">{opp.losses}</p>
+                                <p className="text-gray-600 text-[10px]">L</p>
+                              </div>
+                            </>
+                          )}
+                          <span className="text-gray-600 text-sm ml-1">{isExpanded ? "▾" : "▸"}</span>
+                        </div>
+                      </div>
+
+                      {total > 0 && (
+                        <div className="mt-3 bg-[#222] rounded-full h-1.5 overflow-hidden flex">
+                          <div className="bg-cyan-400 h-full transition-all" style={{ width: `${opp.wins / total * 100}%` }} />
+                          <div className="bg-gray-600 h-full transition-all" style={{ width: `${opp.draws / total * 100}%` }} />
+                          <div className="bg-red-500 h-full transition-all" style={{ width: `${opp.losses / total * 100}%` }} />
+                        </div>
+                      )}
+                    </button>
+
+                    {/* Expanded */}
+                    {isExpanded && (
+                      <div className="border-t border-[#1A1A1A] px-5 pb-5">
+
+                        {/* Pending score */}
+                        {pendingScoreMatches.map((m, idx) => {
+                          const isP1 = m.player1_id === myUserId;
+                          const matchNum = idx + 1;
+                          return (
+                            <div key={m.id} className="bg-[#1A1A1A] border border-orange-500/20 rounded-xl p-3 mt-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-gray-400 text-xs font-bold mb-0.5">Match {matchNum}</p>
+                                  <p className="text-orange-500 text-xs font-bold">Score not entered yet</p>
+                                  <p className="text-gray-600 text-xs">{opp.game} · {formatDate(m.played_at)}</p>
+                                </div>
+                                <button onClick={() => { setScoreMatch(m); setScore1("0"); setScore2("0"); }}
+                                  className="text-cyan-400 text-xs font-bold border border-cyan-400 px-3 py-1.5 rounded-lg hover:bg-cyan-400/10 transition">
                                   Enter Score
                                 </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Approved match history */}
-                      <div className="mt-3">
-                        <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-2">Match History</p>
-                        {opp.matches.filter(m => m.status === "approved").length === 0 ? (
-                          <p className="text-gray-600 text-xs">No approved matches yet</p>
-                        ) : (
-                          opp.matches.filter(m => m.status === "approved").map(m => {
-                            const isP1 = m.player1_id === myUserId;
-                            const myScore = isP1 ? m.player1_score : m.player2_score;
-                            const theirScore = isP1 ? m.player2_score : m.player1_score;
-                            const won = myScore > theirScore;
-                            const drew = myScore === theirScore;
-                            return (
-                              <div key={m.id} className="flex items-center justify-between py-2.5 border-b border-[#222] last:border-0">
-                                <div>
-                                  <p className="text-gray-500 text-xs">{m.game} · {formatDate(m.played_at)}</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-white font-bold text-sm">{myScore} - {theirScore}</span>
-                                  <span className={"text-xs font-bold px-2 py-0.5 rounded " + (won ? "text-cyan-400 bg-cyan-400/10" : drew ? "text-gray-400 bg-[#222]" : "text-red-400 bg-red-400/10")}>
-                                    {won ? "W" : drew ? "D" : "L"}
-                                  </span>
-                                </div>
                               </div>
-                            );
-                          })
+                            </div>
+                          );
+                        })}
+
+                        {/* Pending approval (submitted by me, waiting) */}
+                        {pendingApprovalMatches.filter(m => m.score_entered_by === myUserId).map((m, idx) => {
+                          const isP1 = m.player1_id === myUserId;
+                          const myScore = isP1 ? m.player1_score : m.player2_score;
+                          const theirScore = isP1 ? m.player2_score : m.player1_score;
+                          const matchNum = pendingScoreMatches.length + idx + 1;
+                          return (
+                            <div key={m.id} className="bg-[#1A1A1A] border border-yellow-500/20 rounded-xl p-3 mt-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-gray-400 text-xs font-bold mb-0.5">Match {matchNum}</p>
+                                  <p className="text-yellow-500 text-xs font-bold">Submitted · Waiting for approval</p>
+                                  <p className="text-gray-600 text-xs">{opp.game} · {formatDate(m.played_at)}</p>
+                                </div>
+                                <span className="text-yellow-500 font-extrabold text-lg">{myScore} - {theirScore}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Approved match history */}
+                        {approvedMatches.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-2">Match History</p>
+                            {approvedMatches.map((m, idx) => {
+                              const isP1 = m.player1_id === myUserId;
+                              const myScore = isP1 ? m.player1_score : m.player2_score;
+                              const theirScore = isP1 ? m.player2_score : m.player1_score;
+                              const won = myScore > theirScore;
+                              const drew = myScore === theirScore;
+                              const matchNum = pendingScoreMatches.length + pendingApprovalMatches.filter(m => m.score_entered_by === myUserId).length + idx + 1;
+                              return (
+                                <div key={m.id} className="flex items-center justify-between py-3 border-b border-[#222] last:border-0">
+                                  <div>
+                                    <p className="text-gray-400 text-xs font-bold">Match {matchNum}</p>
+                                    <p className="text-gray-600 text-xs">{opp.game} · {formatDate(m.played_at)}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-white font-bold">{myScore} - {theirScore}</span>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${won ? "text-cyan-400 bg-cyan-400/10" : drew ? "text-gray-400 bg-[#222]" : "text-red-400 bg-red-400/10"}`}>
+                                      {won ? "W" : drew ? "D" : "L"}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {approvedMatches.length === 0 && pendingScoreMatches.length === 0 && pendingApprovalMatches.length === 0 && (
+                          <p className="text-gray-600 text-xs mt-4">No matches yet</p>
                         )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </main>
 
@@ -454,24 +496,24 @@ export default function PlayerH2H() {
             <div className="flex gap-2 flex-wrap mb-5">
               {GAMES.map(g => (
                 <button key={g} onClick={() => setSelectedGame(g)}
-                  className={"px-3 py-1.5 rounded-lg border text-sm font-bold " + (selectedGame === g ? "bg-cyan-400 text-black border-cyan-400" : "border-[#333] text-gray-500")}>
+                  className={`px-3 py-1.5 rounded-lg border text-sm font-bold transition ${selectedGame === g ? "bg-cyan-400 text-black border-cyan-400" : "border-[#333] text-gray-500 hover:border-gray-400"}`}>
                   {g}
                 </button>
               ))}
             </div>
             <label className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2 block">Select Opponent</label>
             {rosterPlayers.length === 0 ? (
-              <p className="text-gray-600 text-sm">No registered players found</p>
+              <p className="text-gray-600 text-sm py-4 text-center">No registered players found</p>
             ) : (
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                 {rosterPlayers.map(p => (
                   <button key={p.id} onClick={() => setSelectedOpponent(p)}
-                    className={"flex items-center gap-3 p-3 rounded-xl border text-left " + (selectedOpponent?.id === p.id ? "border-cyan-400 bg-[#001A1A]" : "border-[#222] bg-[#1A1A1A]")}>
-                    <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold shrink-0">
-                      {p.player_name[0]?.toUpperCase()}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition ${selectedOpponent?.id === p.id ? "border-cyan-400 bg-[#001A1A]" : "border-[#222] bg-[#1A1A1A] hover:border-[#444]"}`}>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shrink-0 ${selectedOpponent?.id === p.id ? "bg-cyan-400 text-black" : "bg-orange-500"}`}>
+                      {selectedOpponent?.id === p.id ? "✓" : p.player_name[0]?.toUpperCase()}
                     </div>
                     <span className="text-white font-bold text-sm">{p.player_name}</span>
-                    {selectedOpponent?.id === p.id && <span className="ml-auto text-cyan-400 text-sm">Selected</span>}
+                    {selectedOpponent?.id === p.id && <span className="ml-auto text-cyan-400 text-xs font-bold">Selected</span>}
                   </button>
                 ))}
               </div>
@@ -490,26 +532,29 @@ export default function PlayerH2H() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center px-4 z-50">
           <div className="bg-[#111] rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-cyan-400 text-xl font-bold mb-2">Enter Score</h2>
-            <p className="text-gray-500 text-sm mb-5">{scoreMatch.player1_name} vs {scoreMatch.player2_name}</p>
-            <div className="flex items-center justify-center gap-4 mb-6">
+            <p className="text-gray-500 text-sm mb-1">{scoreMatch.player1_name} vs {scoreMatch.player2_name}</p>
+            <p className="text-gray-600 text-xs mb-5">{scoreMatch.game}</p>
+            <div className="flex items-center justify-center gap-4 mb-4">
               <div className="text-center">
                 <p className="text-gray-500 text-xs mb-2">{scoreMatch.player1_name}</p>
                 <input type="number" min="0" value={score1}
                   onChange={e => setScore1(String(Math.max(0, parseInt(e.target.value) || 0)))}
-                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center" />
+                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center focus:outline-none focus:border-cyan-400" />
               </div>
-              <span className="text-gray-600 text-2xl font-bold">-</span>
+              <span className="text-gray-600 text-2xl font-bold mt-4">-</span>
               <div className="text-center">
                 <p className="text-gray-500 text-xs mb-2">{scoreMatch.player2_name}</p>
                 <input type="number" min="0" value={score2}
                   onChange={e => setScore2(String(Math.max(0, parseInt(e.target.value) || 0)))}
-                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center" />
+                  className="bg-[#0A0A0A] text-cyan-400 border border-[#333] rounded-lg p-3 text-2xl font-bold w-20 text-center focus:outline-none focus:border-cyan-400" />
               </div>
             </div>
-            <p className="text-gray-600 text-xs text-center mb-4">The other player will need to approve this score</p>
+            <div className="bg-[#1A1A1A] rounded-xl p-3 mb-5 text-center">
+              <p className="text-gray-500 text-xs">After submitting, the other player will need to approve this score before it counts.</p>
+            </div>
             <button onClick={enterScore} disabled={savingScore}
-              className="w-full bg-cyan-400 text-black font-bold py-3 rounded-lg hover:bg-cyan-300 disabled:opacity-50">
-              {savingScore ? "Saving..." : "Submit Score"}
+              className="w-full bg-cyan-400 text-black font-bold py-3 rounded-lg hover:bg-cyan-300 disabled:opacity-50 transition">
+              {savingScore ? "Submitting..." : "Submit Score"}
             </button>
             <button onClick={() => setScoreMatch(null)} className="w-full text-gray-500 py-3 mt-2">Cancel</button>
           </div>
