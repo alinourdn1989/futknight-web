@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AdminSidebar from "@/app/admin/components/Sidebar";
 import KnockoutBracket from "@/components/KnockoutBracket";
+import { QRCodeSVG } from "qrcode.react";
 
 type AdminPlayer = { id: string; player_name: string; player_email: string; player_phone: string; user_id: string | null; };
 type TournamentPlayer = { id: string; user_id: string; status: string; player_name: string; };
@@ -28,9 +29,12 @@ export default function TournamentDetail() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [activeTab, setActiveTab] = useState<"players" | "teams" | "fixtures" | "standings" | "bracket">("players");
   const [modalOpen, setModalOpen] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [qrUrl, setQrUrl] = useState("");
+  const qrRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -137,6 +141,30 @@ export default function TournamentDetail() {
     setTimeout(() => setLinkCopied(false), 2000);
   }
 
+  function openQrModal() {
+    setQrUrl(window.location.origin + "/tournament/" + tournamentId);
+    setQrModalOpen(true);
+  }
+
+  function downloadQR() {
+    const svg = qrRef.current?.querySelector("svg");
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 400;
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    img.onload = () => {
+      ctx?.drawImage(img, 0, 0, 400, 400);
+      const a = document.createElement("a");
+      a.download = `futknight-${tournament?.name || "tournament"}-qr.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+    };
+    img.src = "data:image/svg+xml;base64," + btoa(svgData);
+  }
+
   if (loading) return (
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
@@ -156,7 +184,11 @@ export default function TournamentDetail() {
             <button onClick={() => router.push("/admin/tournaments")} className="text-orange-500 text-sm mb-1">Back</button>
             <h1 className="text-white text-2xl font-extrabold">{tournament?.name}</h1>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
+            <button onClick={openQrModal}
+              className="bg-[#1A1A1A] border border-[#333] text-orange-500 px-3 py-2 rounded-lg hover:border-orange-500 text-sm font-bold transition">
+              QR Code
+            </button>
             <button onClick={copyShareLink}
               className={"border px-3 py-2 rounded-lg text-sm font-bold transition " + (linkCopied ? "bg-cyan-400 text-black border-cyan-400" : "bg-[#1A1A1A] border-[#333] text-cyan-400 hover:border-cyan-400")}>
               {linkCopied ? "Copied!" : "Share"}
@@ -340,7 +372,8 @@ export default function TournamentDetail() {
                 <p className="text-white font-bold">Knockout Format</p>
                 <p className="text-gray-600 text-sm mt-2">No standings for knockout</p>
                 {isCompleted && tournament?.winner_team_name && (
-                  <div className="mt-6"><p className="text-4xl mb-2">🏆</p>
+                  <div className="mt-6">
+                    <p className="text-4xl mb-2">🏆</p>
                     <p className="text-cyan-400 font-bold text-xl">{tournament.winner_team_name}</p>
                     <p className="text-gray-500 text-sm mt-1">Tournament Winner</p>
                   </div>
@@ -385,6 +418,44 @@ export default function TournamentDetail() {
           />
         )}
       </main>
+
+      {/* QR Code Modal */}
+      {qrModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center px-4 z-50">
+          <div className="bg-[#111] rounded-2xl p-6 w-full max-w-sm text-center">
+            <h2 className="text-cyan-400 text-xl font-bold mb-1">Tournament QR Code</h2>
+            <p className="text-gray-500 text-sm mb-6">Players scan this to view the tournament</p>
+
+            {/* QR Code */}
+            <div ref={qrRef} className="bg-white rounded-2xl p-5 inline-block mb-6">
+              <QRCodeSVG
+                value={qrUrl}
+                size={220}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="H"
+                includeMargin={false}
+              />
+            </div>
+
+            {/* Tournament name below QR */}
+            <p className="text-white font-extrabold text-lg mb-1">{tournament?.name}</p>
+            <p className="text-gray-600 text-xs mb-6 break-all">{qrUrl}</p>
+
+            <div className="flex gap-3">
+              <button onClick={downloadQR}
+                className="flex-1 bg-orange-500 text-white font-bold py-3 rounded-lg hover:bg-orange-400 transition text-sm">
+                Download PNG
+              </button>
+              <button onClick={copyShareLink}
+                className="flex-1 bg-[#1A1A1A] border border-[#333] text-cyan-400 font-bold py-3 rounded-lg hover:border-cyan-400 transition text-sm">
+                {linkCopied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+            <button onClick={() => setQrModalOpen(false)} className="w-full text-gray-500 py-3 mt-2">Close</button>
+          </div>
+        </div>
+      )}
 
       {/* Invite Modal */}
       {modalOpen && (
