@@ -113,6 +113,7 @@ export default function PlayerTournaments() {
 		<button onClick={() => router.push("/football")} className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm transition">
   ⚽ Football
 </button>
+<button onClick={() => router.push("/player/h2h")} className="...">H2H</button>
 		<button onClick={() => router.push("/player/stats")} className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm transition">
   📊 Stats
 </button>

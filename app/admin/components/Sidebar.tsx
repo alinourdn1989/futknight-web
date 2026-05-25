@@ -23,6 +23,7 @@ export default function AdminSidebar() {
     { href: "/admin/stats", label: "Stats", icon: "Stats" },
     { href: "/football", label: "Football Hub", icon: "Football" },
     { href: "/admin/profile", label: "Profile", icon: "Profile" },
+	{ href: "/admin/h2h", label: "Head-to-Head", icon: "H2H" },
   ];
 
   const icons: { [key: string]: string } = {
