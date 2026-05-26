@@ -75,7 +75,7 @@ const groups = [
           onClick={() => { setOpen(!open); setMobileOpen(false); }}
           className="w-6 h-6 rounded-md border border-[#222] bg-[#111] flex items-center justify-center hover:border-cyan-400 transition"
           aria-label="Toggle sidebar">
-          <i className={"ti text-[#555] transition-transform " + (collapsed ? "ti-chevron-right" : "ti-chevron-left")} style={{ fontSize: 12 }} aria-hidden="true" />
+          <span className="text-[#555] text-xs font-bold" style={{ transition: "transform 0.25s", display: "inline-block", transform: collapsed ? "rotate(180deg)" : "rotate(0deg)" }}>←</span>
         </button>
       </div>
 
