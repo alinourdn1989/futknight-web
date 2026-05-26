@@ -6,11 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 
 type Tournament = {
   id: string; name: string; game: string; format: string;
-  team_size: string; status: string; date: string;
+  team_size: string; status: string; date: string; winner_team_name?: string;
 };
 
 type PlayerStats = {
-  totalGoals: number; tournamentsPlayed: number; wins: number;
+  totalGoals: number; tournamentsPlayed: number; wins: number; badges: number;
 };
 
 export default function PlayerTournaments() {
@@ -19,8 +19,9 @@ export default function PlayerTournaments() {
 
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [playerName, setPlayerName] = useState("");
-  const [stats, setStats] = useState<PlayerStats>({ totalGoals: 0, tournamentsPlayed: 0, wins: 0 });
+  const [stats, setStats] = useState<PlayerStats>({ totalGoals: 0, tournamentsPlayed: 0, wins: 0, badges: 0 });
   const [loading, setLoading] = useState(true);
+  const [activeNav, setActiveNav] = useState("tournaments");
 
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
@@ -29,14 +30,20 @@ export default function PlayerTournaments() {
 
     const { data: tp } = await supabase.from("tournament_players").select("tournament_id, player_name").eq("user_id", user.id);
     const ids = (tp || []).map(t => t.tournament_id);
-    if (tp && tp.length > 0) setPlayerName(tp[0].player_name);
+    const name = tp?.[0]?.player_name || "";
+    if (name) setPlayerName(name);
     if (ids.length === 0) { setTournaments([]); setLoading(false); return; }
 
     const { data } = await supabase.from("tournaments").select("*").in("id", ids).order("date", { ascending: false });
     if (data) setTournaments(data);
 
-    const { data: goals } = await supabase.from("match_goals").select("goals").in("tournament_id", ids).eq("player_name", tp?.[0]?.player_name || "");
-    const totalGoals = (goals || []).reduce((sum, g) => sum + (g.goals || 0), 0);
+    const [goalsRes, badgesRes] = await Promise.all([
+      supabase.from("match_goals").select("goals").in("tournament_id", ids).eq("player_name", name),
+      supabase.from("player_badges").select("id").eq("player_name", name),
+    ]);
+
+    const totalGoals = (goalsRes.data || []).reduce((sum, g) => sum + (g.goals || 0), 0);
+    const badges = (badgesRes.data || []).length;
 
     const completedTournaments = (data || []).filter(t => t.status === "completed");
     let wins = 0;
@@ -48,7 +55,7 @@ export default function PlayerTournaments() {
       }
     }
 
-    setStats({ totalGoals, tournamentsPlayed: ids.length, wins });
+    setStats({ totalGoals, tournamentsPlayed: ids.length, wins, badges });
     setLoading(false);
   }, [supabase]);
 
@@ -60,79 +67,101 @@ export default function PlayerTournaments() {
     router.refresh();
   }
 
-  function statusColor(status: string) {
-    if (status === "active") return "text-cyan-400";
-    if (status === "completed") return "text-orange-500";
-    return "text-gray-500";
-  }
-
-  function statusLabel(status: string) {
-    if (status === "upcoming") return "Upcoming";
-    if (status === "active") return "Active";
-    if (status === "completed") return "Completed";
-    return status;
-  }
-
   const active = tournaments.filter(t => t.status === "active");
   const upcoming = tournaments.filter(t => t.status === "upcoming");
   const completed = tournaments.filter(t => t.status === "completed");
 
   const navLinks = [
-    { label: "Football", icon: "⚽", path: "/football" },
-    { label: "H2H", icon: "⚔️", path: "/player/h2h" },
-    { label: "Stats", icon: "📊", path: "/player/stats" },
-    { label: "Profile", icon: "👤", path: "/player/profile" },
+    { key: "tournaments", label: "Home", icon: "🎮", path: "/player/tournaments" },
+    { key: "football", label: "Football", icon: "⚽", path: "/football" },
+    { key: "h2h", label: "H2H", icon: "⚔️", path: "/player/h2h" },
+    { key: "stats", label: "Stats", icon: "📊", path: "/player/stats" },
+    { key: "profile", label: "Profile", icon: "👤", path: "/player/profile" },
   ];
+
+  const initials = playerName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "P";
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] pb-20 md:pb-0">
       {/* Top navbar */}
-      <nav className="border-b border-[#111] px-4 md:px-10 py-4 flex justify-between items-center sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-sm z-40">
-        <div>
-          <span className="text-cyan-400 text-lg font-extrabold">FutKnight</span>
-          {playerName && <span className="text-gray-500 text-sm ml-3 hidden md:inline">Welcome, <span className="text-white font-bold">{playerName}</span></span>}
+      <nav className="border-b border-[#111] px-4 md:px-8 py-3 flex justify-between items-center sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-sm z-40">
+        {/* Left: logo + player */}
+        <div className="flex items-center gap-3">
+          <span className="text-cyan-400 text-base font-extrabold">⚔️ FutKnight</span>
+          {playerName && (
+            <div className="hidden md:flex items-center gap-2 bg-[#111] border border-[#1A1A1A] rounded-lg px-2.5 py-1.5">
+              <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-white text-[9px] font-bold">{initials}</div>
+              <span className="text-gray-400 text-xs">{playerName}</span>
+              <span className="text-[10px] bg-cyan-400/10 text-cyan-400 border border-cyan-400/20 px-1.5 py-0.5 rounded font-bold">Player</span>
+            </div>
+          )}
         </div>
 
-        {/* Desktop nav links */}
-        <div className="hidden md:flex gap-2 items-center">
+        {/* Desktop nav */}
+        <div className="hidden md:flex items-center gap-1">
           {navLinks.map(link => (
-            <button key={link.path} onClick={() => router.push(link.path)}
-              className="bg-[#1A1A1A] border border-[#333] text-cyan-400 px-3 py-2 rounded-lg hover:border-cyan-400 text-sm font-medium transition">
-              {link.icon} {link.label}
+            <button key={link.path} onClick={() => { router.push(link.path); setActiveNav(link.key); }}
+              className={"flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition " + (
+                activeNav === link.key
+                  ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
+                  : "text-gray-500 hover:text-gray-300 hover:bg-[#111]"
+              )}>
+              <span>{link.icon}</span>
+              <span>{link.label}</span>
             </button>
           ))}
-          <button onClick={handleLogout}
-            className="bg-[#1A1A1A] border border-[#333] text-gray-400 px-3 py-2 rounded-lg hover:border-gray-500 text-sm transition ml-1">
+          <div className="w-px h-5 bg-[#222] mx-1" />
+          <button onClick={handleLogout} className="text-gray-600 text-xs px-3 py-2 rounded-lg hover:text-gray-400 hover:bg-[#111] transition">
             Logout
           </button>
         </div>
 
-        {/* Mobile — logout only in top right */}
-        <button onClick={handleLogout} className="md:hidden text-gray-500 text-sm border border-[#333] px-3 py-1.5 rounded-lg">
+        {/* Mobile logout */}
+        <button onClick={handleLogout} className="md:hidden text-gray-600 text-xs border border-[#333] px-2.5 py-1.5 rounded-lg">
           Logout
         </button>
       </nav>
 
-      <main className="px-4 md:px-10 py-8 max-w-6xl mx-auto">
-        {/* Stats bar */}
-        {!loading && stats.tournamentsPlayed > 0 && (
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-5 text-center">
-              <p className="text-cyan-400 text-3xl font-extrabold">{stats.tournamentsPlayed}</p>
-              <p className="text-gray-500 text-sm mt-1">Tournaments</p>
-            </div>
-            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-5 text-center">
-              <p className="text-orange-500 text-3xl font-extrabold">{stats.totalGoals}</p>
-              <p className="text-gray-500 text-sm mt-1">Total Goals</p>
-            </div>
-            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-5 text-center">
-              <p className="text-cyan-400 text-3xl font-extrabold">{stats.wins}</p>
-              <p className="text-gray-500 text-sm mt-1">Wins</p>
+      <main className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
+
+        {/* Player header — mobile */}
+        {playerName && (
+          <div className="md:hidden flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold">{initials}</div>
+            <div>
+              <p className="text-white font-bold">{playerName}</p>
+              <p className="text-gray-600 text-xs">Player Dashboard</p>
             </div>
           </div>
         )}
 
-        <h2 className="text-white font-extrabold text-xl mb-4">My Tournaments</h2>
+        {/* Stats bar */}
+        {!loading && stats.tournamentsPlayed > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-4 text-center">
+              <p className="text-cyan-400 text-2xl font-extrabold">{stats.tournamentsPlayed}</p>
+              <p className="text-gray-600 text-xs mt-1">Tournaments</p>
+            </div>
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-4 text-center">
+              <p className="text-orange-500 text-2xl font-extrabold">{stats.totalGoals}</p>
+              <p className="text-gray-600 text-xs mt-1">Goals</p>
+            </div>
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-4 text-center">
+              <p className="text-cyan-400 text-2xl font-extrabold">{stats.wins}</p>
+              <p className="text-gray-600 text-xs mt-1">Wins</p>
+            </div>
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-4 text-center">
+              <p className="text-orange-500 text-2xl font-extrabold">{stats.badges}</p>
+              <p className="text-gray-600 text-xs mt-1">Badges</p>
+            </div>
+          </div>
+        )}
+
+        {/* Title */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-extrabold text-lg">My Tournaments</h2>
+          <span className="text-gray-600 text-xs">{tournaments.length} total</span>
+        </div>
 
         {loading ? (
           <p className="text-cyan-400 text-center mt-10">Loading...</p>
@@ -140,7 +169,7 @@ export default function PlayerTournaments() {
           <div className="text-center mt-32">
             <p className="text-4xl mb-4">🎮</p>
             <p className="text-white text-lg font-bold">No tournaments yet</p>
-            <p className="text-gray-600 mt-2">You will appear here once an admin adds you to a tournament</p>
+            <p className="text-gray-600 mt-2">You will appear here once an admin adds you</p>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
@@ -148,7 +177,7 @@ export default function PlayerTournaments() {
               <div>
                 <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">Active</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {active.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} statusColor={statusColor} statusLabel={statusLabel} />)}
+                  {active.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} />)}
                 </div>
               </div>
             )}
@@ -156,7 +185,7 @@ export default function PlayerTournaments() {
               <div>
                 <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">Upcoming</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {upcoming.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} statusColor={statusColor} statusLabel={statusLabel} />)}
+                  {upcoming.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} />)}
                 </div>
               </div>
             )}
@@ -164,7 +193,7 @@ export default function PlayerTournaments() {
               <div>
                 <p className="text-gray-600 text-xs font-bold uppercase tracking-widest mb-3">Completed</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {completed.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} statusColor={statusColor} statusLabel={statusLabel} />)}
+                  {completed.map(t => <TournamentCard key={t.id} t={t} onClick={() => router.push(`/player/tournaments/${t.id}`)} />)}
                 </div>
               </div>
             )}
@@ -175,10 +204,13 @@ export default function PlayerTournaments() {
       {/* Mobile bottom tab bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0D0D0D] border-t border-[#1A1A1A] flex z-50">
         {navLinks.map(link => (
-          <button key={link.path} onClick={() => router.push(link.path)}
-            className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-gray-500 hover:text-cyan-400 transition">
-            <span className="text-xl">{link.icon}</span>
-            <span className="text-[10px] font-bold">{link.label}</span>
+          <button key={link.path} onClick={() => { router.push(link.path); setActiveNav(link.key); }}
+            className={"flex-1 flex flex-col items-center justify-center py-3 gap-0.5 transition " + (
+              activeNav === link.key ? "text-cyan-400" : "text-gray-600 hover:text-gray-400"
+            )}>
+            <span className="text-lg">{link.icon}</span>
+            <span className="text-[9px] font-bold">{link.label}</span>
+            {activeNav === link.key && <span className="w-1 h-1 bg-cyan-400 rounded-full mt-0.5" />}
           </button>
         ))}
       </div>
@@ -186,23 +218,42 @@ export default function PlayerTournaments() {
   );
 }
 
-function TournamentCard({ t, onClick, statusColor, statusLabel }: {
-  t: any; onClick: () => void;
-  statusColor: (s: string) => string;
-  statusLabel: (s: string) => string;
-}) {
+function TournamentCard({ t, onClick }: { t: any; onClick: () => void }) {
+  const isActive = t.status === "active";
+  const isCompleted = t.status === "completed";
+
   return (
     <button onClick={onClick}
-      className={"text-left bg-[#111] rounded-xl p-4 border " + (t.status === "active" ? "border-orange-500" : "border-[#1A1A1A]") + " hover:border-cyan-400 transition w-full"}>
-      <div className="flex justify-between items-center mb-2.5">
-        <span className="text-white font-bold">{t.name}</span>
-        <span className={"text-xs font-bold " + statusColor(t.status)}>{statusLabel(t.status)}</span>
+      className={"relative text-left bg-[#111] rounded-2xl p-4 border transition w-full overflow-hidden hover:border-cyan-400/50 " + (isActive ? "border-orange-500/40" : "border-[#1A1A1A]")}>
+      {isActive && <div className="absolute top-0 left-0 right-0 h-0.5 bg-orange-500" />}
+
+      <div className="flex justify-between items-start mb-2.5">
+        <p className="text-white font-bold text-sm pr-2 leading-tight">{t.name}</p>
+        <span className={"text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 " + (
+          isActive ? "text-orange-500 bg-orange-500/10 border-orange-500/25" :
+          isCompleted ? "text-cyan-400 bg-cyan-400/10 border-cyan-400/25" :
+          "text-gray-500 bg-[#1A1A1A] border-[#333]"
+        )}>
+          {isActive ? "Active" : isCompleted ? "Completed" : "Upcoming"}
+        </span>
       </div>
-      <div className="flex gap-2 flex-wrap">
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">{t.game}</span>
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">{t.team_size}</span>
-        <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">{t.format === "round_robin" ? "Round Robin" : "Knockout"}</span>
-        {t.date && <span className="text-gray-500 text-xs bg-[#1A1A1A] px-2 py-1 rounded">{t.date}</span>}
+
+      <div className="flex gap-1.5 flex-wrap mb-3">
+        <span className="text-gray-500 text-[10px] bg-[#1A1A1A] px-2 py-0.5 rounded">{t.game}</span>
+        <span className="text-gray-500 text-[10px] bg-[#1A1A1A] px-2 py-0.5 rounded">{t.team_size}</span>
+        <span className="text-gray-500 text-[10px] bg-[#1A1A1A] px-2 py-0.5 rounded">{t.format === "round_robin" ? "Round Robin" : "Knockout"}</span>
+      </div>
+
+      {isCompleted && t.winner_team_name && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className="text-sm">🏆</span>
+          <span className="text-orange-500 font-bold text-xs">{t.winner_team_name}</span>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-2.5 border-t border-[#1A1A1A]">
+        <span className="text-gray-700 text-[10px]">{t.date}</span>
+        <span className="text-cyan-400 text-[10px] font-bold">View →</span>
       </div>
     </button>
   );
