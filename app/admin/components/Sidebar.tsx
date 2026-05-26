@@ -24,35 +24,35 @@ export default function AdminSidebar() {
     router.refresh();
   }
 
-  const groups = [
-    {
-      label: "Tournaments",
-      items: [
-{ href: "/admin/tournaments", label: "Tournaments", icon: "ti-trophy" },
-{ href: "/admin/history", label: "History", icon: "ti-history" },
-{ href: "/admin/players", label: "Players", icon: "ti-users" },
-      ],
-    },
-    {
-      label: "Analytics",
-      items: [
-{ href: "/admin/stats", label: "Stats", icon: "ti-chart-bar" },
-{ href: "/admin/h2h", label: "Head-to-Head", icon: "ti-arrows-exchange" },
-      ],
-    },
-    {
-      label: "Explore",
-      items: [
-       { href: "/football", label: "Football Hub", icon: "ti-ball-football" },
-      ],
-    },
-    {
-      label: "Account",
-      items: [
-        { href: "/admin/profile", label: "Profile", icon: "ti-user" },
-      ],
-    },
-  ];
+const groups = [
+  {
+    label: "Tournaments",
+    items: [
+      { href: "/admin/tournaments", label: "Tournaments", icon: "🏆" },
+      { href: "/admin/history", label: "History", icon: "📋" },
+      { href: "/admin/players", label: "Players", icon: "👥" },
+    ],
+  },
+  {
+    label: "Analytics",
+    items: [
+      { href: "/admin/stats", label: "Stats", icon: "📊" },
+      { href: "/admin/h2h", label: "Head-to-Head", icon: "⚔️" },
+    ],
+  },
+  {
+    label: "Explore",
+    items: [
+      { href: "/football", label: "Football Hub", icon: "⚽" },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { href: "/admin/profile", label: "Profile", icon: "👤" },
+    ],
+  },
+];
 
   function isActive(href: string) {
     if (href === "/football") return pathname === "/football";
@@ -66,7 +66,7 @@ export default function AdminSidebar() {
         {!collapsed && (
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-cyan-400/10 border border-cyan-400/20 rounded-lg flex items-center justify-center">
-             <i className="ti ti-bolt text-cyan-400" style={{ fontSize: 13 }} aria-hidden="true" />
+             <span style={{ fontSize: 14 }}>⚔️</span>
             </div>
             <span className="text-cyan-400 font-extrabold text-sm">FutKnight</span>
           </div>
@@ -97,7 +97,7 @@ export default function AdminSidebar() {
                       ? "bg-cyan-400/8 text-cyan-400 border border-cyan-400/12"
                       : "text-[#555] hover:bg-[#161616] hover:text-[#999]"
                   )}>
-                  <i className={"ti " + item.icon + " flex-shrink-0 " + (active ? "text-cyan-400" : "text-[#3A3A3A]")} style={{ fontSize: 15 }} aria-hidden="true" />
+                 <span>{item.icon}</span>
                   {!collapsed && <span className="text-xs font-medium truncate">{item.label}</span>}
                   {/* Orange dot when collapsed and active */}
                   {collapsed && active && (
