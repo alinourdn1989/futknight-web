@@ -28,22 +28,22 @@ export default function AdminSidebar() {
     {
       label: "Tournaments",
       items: [
-        { href: "/admin/tournaments", label: "Tournaments", icon: "ti-tournament" },
-        { href: "/admin/history", label: "History", icon: "ti-history" },
-        { href: "/admin/players", label: "Players", icon: "ti-users" },
+{ href: "/admin/tournaments", label: "Tournaments", icon: "ti-trophy" },
+{ href: "/admin/history", label: "History", icon: "ti-history" },
+{ href: "/admin/players", label: "Players", icon: "ti-users" },
       ],
     },
     {
       label: "Analytics",
       items: [
-        { href: "/admin/stats", label: "Stats", icon: "ti-chart-bar" },
-        { href: "/admin/h2h", label: "Head-to-Head", icon: "ti-arrows-exchange" },
+{ href: "/admin/stats", label: "Stats", icon: "ti-chart-bar" },
+{ href: "/admin/h2h", label: "Head-to-Head", icon: "ti-arrows-exchange" },
       ],
     },
     {
       label: "Explore",
       items: [
-        { href: "/football", label: "Football Hub", icon: "ti-ball-football" },
+       { href: "/football", label: "Football Hub", icon: "ti-ball-football" },
       ],
     },
     {
@@ -66,7 +66,7 @@ export default function AdminSidebar() {
         {!collapsed && (
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-cyan-400/10 border border-cyan-400/20 rounded-lg flex items-center justify-center">
-              <i className="ti ti-sword text-cyan-400" style={{ fontSize: 13 }} aria-hidden="true" />
+             <i className="ti ti-bolt text-cyan-400" style={{ fontSize: 13 }} aria-hidden="true" />
             </div>
             <span className="text-cyan-400 font-extrabold text-sm">FutKnight</span>
           </div>
