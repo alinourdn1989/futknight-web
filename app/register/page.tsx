@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const supabase = createClient();
 
   const [email, setEmail] = useState("");
@@ -25,57 +27,26 @@ export default function RegisterPage() {
     setError("");
 
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
-    if (signUpError) {
-      setError(signUpError.message);
-      setLoading(false);
-      return;
-    }
+    if (signUpError) { setError(signUpError.message); setLoading(false); return; }
 
     const cleanEmail = email.trim().toLowerCase();
-
     const { error: profileError } = await supabase.from("profiles").insert({
-      id: data.user?.id,
-      username,
-      phone: phone.trim() || null,
-      role,
-      email: cleanEmail,
+      id: data.user?.id, username, phone: phone.trim() || null, role, email: cleanEmail,
     });
+    if (profileError) { setError(profileError.message); setLoading(false); return; }
 
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    // Auto-link player to admin roster by email
     if (role === "player") {
-      const { data: adminPlayers } = await supabase
-        .from("admin_players")
-        .select("*")
-        .eq("player_email", cleanEmail);
-
+      const { data: adminPlayers } = await supabase.from("admin_players").select("*").eq("player_email", cleanEmail);
       if (adminPlayers && adminPlayers.length > 0) {
-        for (const adminPlayer of adminPlayers) {
-          await supabase
-            .from("admin_players")
-            .update({ user_id: data.user?.id })
-            .eq("id", adminPlayer.id);
+        for (const ap of adminPlayers) {
+          await supabase.from("admin_players").update({ user_id: data.user?.id }).eq("id", ap.id);
         }
       }
-
-      // Auto-link by phone
       if (phone) {
-        const { data: byPhone } = await supabase
-          .from("admin_players")
-          .select("*")
-          .eq("player_phone", phone.trim());
-
+        const { data: byPhone } = await supabase.from("admin_players").select("*").eq("player_phone", phone.trim());
         if (byPhone && byPhone.length > 0) {
-          for (const adminPlayer of byPhone) {
-            await supabase
-              .from("admin_players")
-              .update({ user_id: data.user?.id })
-              .eq("id", adminPlayer.id);
+          for (const ap of byPhone) {
+            await supabase.from("admin_players").update({ user_id: data.user?.id }).eq("id", ap.id);
           }
         }
       }
@@ -86,83 +57,151 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm flex flex-col items-center">
-        <h1 className="text-cyan-400 text-5xl font-bold">⚔️ FutKnight</h1>
-        <p className="text-gray-500 text-base mb-8 mt-1">Create Account</p>
-
-        {error && <p className="text-red-500 mb-3 text-sm">{error}</p>}
-
-        {success && (
-          <div className="bg-[#003322] rounded-lg p-3 mb-3 w-full">
-            <p className="text-cyan-400 text-sm text-center">
-              ✅ Account created! Please check your email to confirm, then login.
-            </p>
-          </div>
-        )}
-
-        <input
-          className="w-full bg-[#111] text-white border border-[#222] rounded-lg p-3.5 mb-3 text-base outline-none focus:border-cyan-400"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <input
-          className="w-full bg-[#111] text-white border border-[#222] rounded-lg p-3.5 mb-3 text-base outline-none focus:border-cyan-400"
-          placeholder="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          className="w-full bg-[#111] text-white border border-[#222] rounded-lg p-3.5 mb-3 text-base outline-none focus:border-cyan-400"
-          placeholder="Phone (optional)"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-        <input
-          className="w-full bg-[#111] text-white border border-[#222] rounded-lg p-3.5 mb-3 text-base outline-none focus:border-cyan-400"
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <p className="text-gray-500 text-xs mb-2.5 self-start">I am a...</p>
-        <div className="flex gap-3 mb-6 w-full">
-          <button
-            onClick={() => setRole("player")}
-            className={`flex-1 p-3.5 rounded-lg border font-bold ${
-              role === "player"
-                ? "bg-cyan-400 border-cyan-400 text-[#0A0A0A]"
-                : "border-[#333] text-gray-500"
-            }`}
-          >
-            🎮 Player
-          </button>
-          <button
-            onClick={() => setRole("admin")}
-            className={`flex-1 p-3.5 rounded-lg border font-bold ${
-              role === "admin"
-                ? "bg-orange-500 border-orange-500 text-[#0A0A0A]"
-                : "border-[#333] text-gray-500"
-            }`}
-          >
-            👑 Admin
-          </button>
-        </div>
-
-        <button
-          onClick={handleRegister}
-          disabled={loading}
-          className="w-full bg-cyan-400 text-[#0A0A0A] p-4 rounded-lg font-bold text-base hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? "..." : "REGISTER"}
+    <div className="min-h-screen bg-[#0A0A0A] flex flex-col">
+      {/* Navbar */}
+      <nav className="px-6 md:px-12 py-5 flex items-center border-b border-[#111]">
+        <button onClick={() => router.push("/")} className="text-cyan-400 text-xl font-extrabold tracking-tight hover:text-cyan-300 transition">
+          ⚔️ FutKnight
         </button>
+      </nav>
 
-        <Link href="/login" className="text-gray-500 mt-6 text-sm">
-          Already have an account? <span className="text-orange-500">Login</span>
-        </Link>
+      {/* Content */}
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md">
+
+          {success ? (
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-10 text-center">
+              <div className="text-5xl mb-4">✅</div>
+              <h2 className="text-white text-xl font-extrabold mb-2">Account Created!</h2>
+              <p className="text-gray-500 text-sm mb-6">
+                Please check your email to confirm your account, then log in to start playing.
+              </p>
+              <button onClick={() => router.push("/login")}
+                className="w-full bg-cyan-400 text-black font-extrabold py-3.5 rounded-xl hover:bg-cyan-300 transition text-sm">
+                Go to Login
+              </button>
+            </div>
+          ) : (
+            <div className="bg-[#111] border border-[#1A1A1A] rounded-2xl p-8 md:p-10">
+              {/* Header */}
+              <div className="mb-8">
+                <h1 className="text-white text-2xl font-extrabold mb-1">Create your account</h1>
+                <p className="text-gray-500 text-sm">Join FutKnight and start your first tournament</p>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-lg mb-5">
+                  {error}
+                </div>
+              )}
+
+              {/* Role selector */}
+              <div className="mb-6">
+                <label className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2 block">I am a...</label>
+                <div className="flex gap-3">
+                  <button onClick={() => setRole("player")}
+                    className={"flex-1 py-3 rounded-xl border font-bold text-sm transition " + (
+                      role === "player"
+                        ? "bg-cyan-400 border-cyan-400 text-black"
+                        : "border-[#222] text-gray-500 bg-[#0A0A0A] hover:border-cyan-400/50"
+                    )}>
+                    🎮 Player
+                  </button>
+                  <button onClick={() => setRole("admin")}
+                    className={"flex-1 py-3 rounded-xl border font-bold text-sm transition " + (
+                      role === "admin"
+                        ? "bg-orange-500 border-orange-500 text-white"
+                        : "border-[#222] text-gray-500 bg-[#0A0A0A] hover:border-orange-500/50"
+                    )}>
+                    👑 Admin
+                  </button>
+                </div>
+                <p className="text-gray-700 text-xs mt-2">
+                  {role === "player"
+                    ? "Players join tournaments created by admins"
+                    : "Admins create and manage tournaments"}
+                </p>
+              </div>
+
+              {/* Fields */}
+              <div className="flex flex-col gap-4 mb-6">
+                <div>
+                  <label className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1.5 block">Username</label>
+                  <input
+                    className="w-full bg-[#0A0A0A] text-white border border-[#222] rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400 transition"
+                    placeholder="Your display name"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1.5 block">Email</label>
+                  <input
+                    className="w-full bg-[#0A0A0A] text-white border border-[#222] rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400 transition"
+                    placeholder="your@email.com"
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    autoCapitalize="none"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1.5 block">
+                    Phone <span className="text-gray-700 normal-case font-normal">(optional)</span>
+                  </label>
+                  <input
+                    className="w-full bg-[#0A0A0A] text-white border border-[#222] rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400 transition"
+                    placeholder="+961 xx xxx xxx"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1.5 block">Password</label>
+                  <input
+                    className="w-full bg-[#0A0A0A] text-white border border-[#222] rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400 transition"
+                    placeholder="Min 6 characters"
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleRegister()}
+                  />
+                </div>
+              </div>
+
+              {/* Register button */}
+              <button
+                onClick={handleRegister}
+                disabled={loading}
+                className="w-full bg-cyan-400 text-black font-extrabold py-3.5 rounded-xl hover:bg-cyan-300 disabled:opacity-50 transition text-sm">
+                {loading ? "Creating account..." : "Create Account"}
+              </button>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3 my-6">
+                <div className="flex-1 h-px bg-[#1A1A1A]" />
+                <span className="text-gray-700 text-xs">or</span>
+                <div className="flex-1 h-px bg-[#1A1A1A]" />
+              </div>
+
+              {/* Login link */}
+              <p className="text-center text-gray-500 text-sm">
+                Already have an account?{" "}
+                <Link href="/login" className="text-orange-500 font-bold hover:text-orange-400 transition">
+                  Sign In
+                </Link>
+              </p>
+            </div>
+          )}
+
+          {/* Footer links */}
+          <div className="flex justify-center gap-4 mt-6">
+            <button onClick={() => router.push("/privacy")} className="text-gray-700 text-xs hover:text-gray-500 transition">Privacy Policy</button>
+            <span className="text-gray-800 text-xs">·</span>
+            <button onClick={() => router.push("/support")} className="text-gray-700 text-xs hover:text-gray-500 transition">Support</button>
+          </div>
+        </div>
       </div>
     </div>
   );
