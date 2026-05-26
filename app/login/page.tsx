@@ -42,7 +42,9 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center px-6">
       <div className="w-full max-w-sm flex flex-col items-center">
-        <h1 className="text-cyan-400 text-5xl font-bold">⚔️ FutKnight</h1>
+        <button onClick={() => router.push("/")} className="text-cyan-400 text-xl font-extrabold">
+  ⚔️ FutKnight
+</button>
         <p className="text-gray-500 text-base mb-8 mt-1">Welcome Back</p>
 
         {error && <p className="text-red-500 mb-3 text-sm">{error}</p>}
