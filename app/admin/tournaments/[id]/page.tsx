@@ -177,7 +177,7 @@ export default function TournamentDetail() {
   return (
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
-      <<main className="flex-1 px-4 md:px-10 py-8">
+      <main className="flex-1 px-4 md:px-10 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
           <div>
