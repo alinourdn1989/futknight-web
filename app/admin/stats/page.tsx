@@ -124,7 +124,7 @@ export default function AdminStats() {
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
 
-      <main className="flex-1 md:ml-56 px-4 md:px-10 py-8">
+    <main className="flex-1 px-4 md:px-10 py-8">
         <div className="mb-8">
           <h1 className="text-white text-2xl font-extrabold">Stats Dashboard</h1>
           <p className="text-gray-600 text-sm mt-0.5">Overview of all your tournaments</p>

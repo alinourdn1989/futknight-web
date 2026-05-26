@@ -94,7 +94,7 @@ export default function TournamentHistory() {
     <div className="flex w-full min-h-screen bg-[#0A0A0A]">
       <AdminSidebar />
 
-      <main className="flex-1 md:ml-56 px-4 md:px-10 py-8">
+     <main className="flex-1 px-4 md:px-10 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-white text-2xl font-extrabold">Tournament History</h1>
