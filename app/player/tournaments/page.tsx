@@ -22,6 +22,8 @@ export default function PlayerTournaments() {
   const [stats, setStats] = useState<PlayerStats>({ totalGoals: 0, tournamentsPlayed: 0, wins: 0, badges: 0 });
   const [loading, setLoading] = useState(true);
   const [activeNav, setActiveNav] = useState("tournaments");
+  const [search, setSearch] = useState("");
+  const [filterTab, setFilterTab] = useState<"all" | "active" | "upcoming" | "completed">("all");
 
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
@@ -67,9 +69,16 @@ export default function PlayerTournaments() {
     router.refresh();
   }
 
-  const active = tournaments.filter(t => t.status === "active");
-  const upcoming = tournaments.filter(t => t.status === "upcoming");
-  const completed = tournaments.filter(t => t.status === "completed");
+  // Filter logic
+  const filtered = tournaments.filter(t => {
+    const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase());
+    const matchesTab = filterTab === "all" || t.status === filterTab;
+    return matchesSearch && matchesTab;
+  });
+
+  const active = filtered.filter(t => t.status === "active");
+  const upcoming = filtered.filter(t => t.status === "upcoming");
+  const completed = filtered.filter(t => t.status === "completed");
 
   const navLinks = [
     { key: "tournaments", label: "Home", icon: "🎮", path: "/player/tournaments" },
@@ -85,7 +94,6 @@ export default function PlayerTournaments() {
     <div className="min-h-screen bg-[#0A0A0A] pb-20 md:pb-0">
       {/* Top navbar */}
       <nav className="border-b border-[#111] px-4 md:px-8 py-3 flex justify-between items-center sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-sm z-40">
-        {/* Left: logo + player */}
         <div className="flex items-center gap-3">
           <span className="text-cyan-400 text-base font-extrabold">⚔️ FutKnight</span>
           {playerName && (
@@ -97,7 +105,6 @@ export default function PlayerTournaments() {
           )}
         </div>
 
-        {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1">
           {navLinks.map(link => (
             <button key={link.path} onClick={() => { router.push(link.path); setActiveNav(link.key); }}
@@ -111,20 +118,15 @@ export default function PlayerTournaments() {
             </button>
           ))}
           <div className="w-px h-5 bg-[#222] mx-1" />
-          <button onClick={handleLogout} className="text-gray-600 text-xs px-3 py-2 rounded-lg hover:text-gray-400 hover:bg-[#111] transition">
-            Logout
-          </button>
+          <button onClick={handleLogout} className="text-gray-600 text-xs px-3 py-2 rounded-lg hover:text-gray-400 hover:bg-[#111] transition">Logout</button>
         </div>
 
-        {/* Mobile logout */}
-        <button onClick={handleLogout} className="md:hidden text-gray-600 text-xs border border-[#333] px-2.5 py-1.5 rounded-lg">
-          Logout
-        </button>
+        <button onClick={handleLogout} className="md:hidden text-gray-600 text-xs border border-[#333] px-2.5 py-1.5 rounded-lg">Logout</button>
       </nav>
 
       <main className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
 
-        {/* Player header — mobile */}
+        {/* Player header mobile */}
         {playerName && (
           <div className="md:hidden flex items-center gap-3 mb-5">
             <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold">{initials}</div>
@@ -157,10 +159,32 @@ export default function PlayerTournaments() {
           </div>
         )}
 
-        {/* Title */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white font-extrabold text-lg">My Tournaments</h2>
-          <span className="text-gray-600 text-xs">{tournaments.length} total</span>
+        {/* Title + search + filter */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-white font-extrabold text-lg">My Tournaments</h2>
+            <span className="text-gray-600 text-xs">{tournaments.length} total</span>
+          </div>
+          <div className="flex flex-col md:flex-row gap-3">
+            <input
+              className="flex-1 bg-[#111] text-white border border-[#1A1A1A] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-cyan-400 transition"
+              placeholder="Search tournaments..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <div className="flex gap-2 flex-wrap">
+              {(["all", "active", "upcoming", "completed"] as const).map(tab => (
+                <button key={tab} onClick={() => setFilterTab(tab)}
+                  className={"px-3 py-2 rounded-xl text-xs font-bold capitalize transition border " + (
+                    filterTab === tab
+                      ? "bg-cyan-400 text-black border-cyan-400"
+                      : "bg-[#111] text-gray-500 border-[#1A1A1A] hover:border-cyan-400/50"
+                  )}>
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -170,6 +194,11 @@ export default function PlayerTournaments() {
             <p className="text-4xl mb-4">🎮</p>
             <p className="text-white text-lg font-bold">No tournaments yet</p>
             <p className="text-gray-600 mt-2">You will appear here once an admin adds you</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center mt-20">
+            <p className="text-white font-bold">No tournaments match your search</p>
+            <button onClick={() => { setSearch(""); setFilterTab("all"); }} className="mt-3 text-cyan-400 text-sm underline">Clear filters</button>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
